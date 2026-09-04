@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:anymex/controllers/services/storage/anymex_cache_manager.dart';
 import 'package:anymex/database/data_keys/keys.dart';
+import 'package:anymex/database/database.dart';
 import 'package:anymex/main.dart';
 import 'package:flutter/painting.dart';
 
@@ -53,7 +54,7 @@ class StorageManagerService {
   }
 
   Future<void> factoryResetIsar() async {
-    await isar.writeTxn(() async {
+    await isar.safeWriteTxn(() async {
       await isar.clear();
     });
   }

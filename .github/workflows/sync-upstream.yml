@@ -1,0 +1,98 @@
+name: Auto Sync Upstream and Trigger Release
+on:
+  schedule:
+    - cron: "0 */6 * * *" # Runs every 6 hours
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+jobs:
+  sync-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Fork Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for New Upstream Release
+        id: check_upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch latest release tag from upstream RyanYuuki/AnymeX
+          UPSTREAM_TAG=$(gh api repos/RyanYuuki/AnymeX/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          echo "Upstream latest tag: $UPSTREAM_TAG"
+
+          # Fetch latest release tag from this fork
+          FORK_TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          echo "Fork latest tag: $FORK_TAG"
+
+          if [ -z "$UPSTREAM_TAG" ]; then
+            echo "Failed to fetch upstream release tag."
+            exit 1
+          fi
+
+          if [ "$UPSTREAM_TAG" = "$FORK_TAG" ]; then
+            echo "Fork is already on the latest release ($FORK_TAG). No sync needed."
+            echo "has_update=false" >> $GITHUB_OUTPUT
+          else
+            echo "New upstream release detected: $UPSTREAM_TAG (current fork tag: $FORK_TAG)"
+            echo "has_update=true" >> $GITHUB_OUTPUT
+            echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fetch and Merge Upstream Release
+        if: steps.check_upstream.outputs.has_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.check_upstream.outputs.upstream_tag }}
+        run: |
+          echo "Adding upstream remote..."
+          git remote add upstream https://github.com/RyanYuuki/AnymeX.git || true
+          git fetch upstream --tags
+
+          echo "Checking out main branch..."
+          git checkout main
+          git pull origin main
+
+          echo "Attempting to merge upstream tag $TAG into custom main..."
+          if git merge --no-edit "$TAG" -m "chore: sync upstream release $TAG"; then
+            echo "Merge successful!"
+            # Push updated main branch
+            git push origin main
+            # Push the tag to trigger release
+            git push origin "$TAG" || true
+
+            # Trigger build workflow explicitly for the new tag
+            echo "Triggering build and release workflow for $TAG..."
+            gh workflow run "Build and Release AnymeX (Android)" --ref "$TAG" || true
+          else
+            echo "Merge conflict encountered!"
+            git merge --abort || true
+            gh issue create \
+              --title "⚠️ Sync conflict with upstream release $TAG" \
+              --body "Automated sync encountered a conflict while merging upstream release **$TAG** into your custom changes.
+
+### Manual Resolution Steps:
+\`\`\`bash
+git fetch upstream --tags
+git checkout main
+git merge $TAG
+# Resolve conflicts in your editor
+git commit -m \"chore: resolve merge conflicts with upstream $TAG\"
+git push origin main
+git push origin $TAG
+\`\`\`"
+            exit 1
+          fi

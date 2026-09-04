@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:anymex/utils/theme_extensions.dart';
 import 'dart:math' show Random;
 
 import 'package:anymex/controllers/cacher/cache_controller.dart';
@@ -40,37 +41,6 @@ import 'package:http/http.dart' as http;
 class MalService extends GetxController implements BaseService, OnlineService {
   final communityService = Get.find<CommunityService>();
 
-  Media? _firstMediaWithCover(Iterable<Media> mediaList) {
-    for (final media in mediaList) {
-      final cover = media.cover;
-      if (cover != null && cover.isNotEmpty) {
-        return media;
-      }
-    }
-    return null;
-  }
-
-  Media? _lastMediaWithCover(Iterable<Media> mediaList) {
-    final list = mediaList.toList(growable: false);
-    for (var index = list.length - 1; index >= 0; index--) {
-      final media = list[index];
-      final cover = media.cover;
-      if (cover != null && cover.isNotEmpty) {
-        return media;
-      }
-    }
-    return null;
-  }
-
-  void _openHomeButtonMedia(Media media) {
-    final tag = 'home-button-${media.serviceType.name}-${media.id}';
-    if (media.mediaType == ItemType.manga) {
-      navigate(() => MangaDetailsPage(media: media, tag: tag));
-      return;
-    }
-    navigate(() => AnimeDetailsPage(media: media, tag: tag));
-  }
-
   @override
   RxList<TrackedMedia> animeList = <TrackedMedia>[].obs;
   @override
@@ -94,8 +64,9 @@ class MalService extends GetxController implements BaseService, OnlineService {
       {String? customFields}) async {
     final newField = customFields ?? field;
     final data = await fetchMAL('$url&$newField') as Map<String, dynamic>;
+    final isManga = url.contains('/manga/');
     return (data['data'] as List<dynamic>)
-        .map((e) => Media.fromMAL(e))
+        .map((e) => Media.fromMAL(e, isManga: isManga))
         .toList()
         .removeDupes();
   }
@@ -213,6 +184,19 @@ class MalService extends GetxController implements BaseService, OnlineService {
 
   @override
   Future<Media> fetchDetails(FetchDetailsParams params) async {
+    if (params.type != null) {
+      if (params.type == ItemType.anime) {
+        final animeData = await fetchWithToken(
+          'https://api.myanimelist.net/v2/anime/${params.id}',
+        );
+        return animeData;
+      } else if (params.type == ItemType.manga) {
+        final mangaData = await fetchWithToken(
+          'https://api.myanimelist.net/v2/manga/${params.id}',
+        );
+        return mangaData;
+      }
+    }
     try {
       final animeData = await fetchWithToken(
         'https://api.myanimelist.net/v2/anime/${params.id}',
@@ -237,7 +221,8 @@ class MalService extends GetxController implements BaseService, OnlineService {
 
     final data = await fetchMAL('$url?$newField') as Map<String, dynamic>;
     cacheController.addCache(data);
-    return Media.fromFullMAL(data);
+    final isManga = url.contains('/manga/');
+    return Media.fromFullMAL(data, isManga: isManga);
   }
 
   @override
@@ -271,72 +256,45 @@ class MalService extends GetxController implements BaseService, OnlineService {
     return [
       if (isLoggedIn.value) ...[
         LayoutBuilder(builder: (context, constraints) {
-          final width = isDesktop ? 300.0 : constraints.maxWidth / 2 - 40;
-          final overflow = constraints.maxWidth < 900;
-          final overflowSecond =
-              !isDesktop ? false : constraints.maxWidth < 600;
-          final animeButtonMedia = _firstMediaWithCover(trendingAnimes);
-          final mangaButtonMedia = _firstMediaWithCover(
-            trendingManga.isNotEmpty ? trendingManga : trendingMangas,
-          );
-          final otherButtonMedia = _lastMediaWithCover([
-            ...popularAnimes,
-            ...(topManga.isNotEmpty ? topManga : popularMangas),
-            ...(trendingManga.isNotEmpty ? trendingManga : trendingMangas),
-            ...trendingAnimes,
-          ]);
-          return Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 15,
-            children: [
-              ImageButton(
-                width: width,
-                height: !isDesktop ? 70 : 90,
-                buttonText: "ANIME LIST",
-                backgroundImage: animeButtonMedia?.cover ?? '',
-                borderRadius: 16.multiplyRadius(),
-                onPressed: () {
-                  navigate(() => const AnimeList());
-                },
-                onLongPress: animeButtonMedia == null
-                    ? null
-                    : () => _openHomeButtonMedia(animeButtonMedia),
-              ),
-              Padding(
-                padding: EdgeInsets.only(top: overflowSecond ? 8.0 : 0),
-                child: ImageButton(
-                  width: width,
-                  height: !isDesktop ? 70 : 90,
-                  buttonText: "MANGA LIST",
-                  borderRadius: 16.multiplyRadius(),
-                  backgroundImage: mangaButtonMedia?.cover ?? '',
-                  onPressed: () {
-                    navigate(() => const AnilistMangaList());
-                  },
-                  onLongPress: mangaButtonMedia == null
-                      ? null
-                      : () => _openHomeButtonMedia(mangaButtonMedia),
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: ActionChip(
+                    label: const Text('Anime', style: TextStyle(fontFamily: 'Poppins-SemiBold')),
+                    avatar: const Icon(Icons.movie_rounded, size: 16),
+                    onPressed: () => navigate(() => const AnimeList()),
+                    side: BorderSide.none,
+                    backgroundColor: context.colors.primaryContainer.opaque(0.3),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.multiplyRadius())),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: EdgeInsets.only(top: overflow ? 8.0 : 0),
-                child: ImageButton(
-                  width: constraints.maxWidth > (width * 3)
-                      ? width
-                      : width * 2 + 15,
-                  height: !isDesktop ? 70 : 90,
-                  buttonText: "OTHER",
-                  borderRadius: 16.multiplyRadius(),
-                  backgroundImage: otherButtonMedia?.cover ?? '',
-                  onPressed: () {
-                    navigate(() => const OtherFeaturesPage());
-                  },
-                  onLongPress: otherButtonMedia == null
-                      ? null
-                      : () => _openHomeButtonMedia(otherButtonMedia),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ActionChip(
+                    label: const Text('Manga', style: TextStyle(fontFamily: 'Poppins-SemiBold')),
+                    avatar: const Icon(Icons.menu_book_rounded, size: 16),
+                    onPressed: () => navigate(() => const AnilistMangaList()),
+                    side: BorderSide.none,
+                    backgroundColor: context.colors.primaryContainer.opaque(0.3),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.multiplyRadius())),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ActionChip(
+                    label: const Text('Other', style: TextStyle(fontFamily: 'Poppins-SemiBold')),
+                    avatar: const Icon(Icons.apps_rounded, size: 16),
+                    onPressed: () => navigate(() => const OtherFeaturesPage()),
+                    side: BorderSide.none,
+                    backgroundColor: context.colors.primaryContainer.opaque(0.3),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.multiplyRadius())),
+                  ),
+                ),
+              ],
+            ),
           );
         }),
         const SizedBox(height: 10),

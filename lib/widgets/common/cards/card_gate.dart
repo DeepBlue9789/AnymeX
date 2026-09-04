@@ -11,15 +11,15 @@ import 'package:flutter/material.dart';
 double getCardHeight(CardStyle style, bool isDesktop) {
   switch (style) {
     case CardStyle.modern:
-      return isDesktop ? 230 : 170;
+      return isDesktop ? 230 : 145;
     case CardStyle.exotic:
-      return isDesktop ? 300 : 240;
+      return isDesktop ? 300 : 210;
     case CardStyle.saikou:
-      return isDesktop ? 290 : 230;
+      return isDesktop ? 290 : 200;
     case CardStyle.minimalExotic:
-      return isDesktop ? 270 : 210;
+      return isDesktop ? 270 : 190;
     default:
-      return isDesktop ? 230 : 170;
+      return isDesktop ? 230 : 145;
   }
 }
 

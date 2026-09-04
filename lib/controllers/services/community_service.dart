@@ -757,8 +757,8 @@ class CommunityService extends GetxController {
     await fetchAll();
   }
 
-  static String? get _botBaseUrl => dotenv.env['BOT_BASE_URL'];
-  static String? get _botSecret => dotenv.env['BOT_API_SECRET'];
+  static String? get _botBaseUrl => dotenv.isInitialized ? dotenv.env['BOT_BASE_URL'] : null;
+  static String? get _botSecret => dotenv.isInitialized ? dotenv.env['BOT_API_SECRET'] : null;
 
   static bool get votingEnabled =>
       _botBaseUrl != null &&

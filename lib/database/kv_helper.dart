@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:anymex/database/database.dart';
 import 'package:anymex/database/isar_models/key_value.dart';
 import 'package:anymex/main.dart';
 import 'package:anymex/utils/logger.dart';
@@ -9,9 +10,9 @@ extension KvExtensions on Enum {
   T get<T>([T? defaultValue]) =>
       KvHelper.get<T>(name, defaultVal: defaultValue);
 
-  void set<T>(T value) => KvHelper.set(name, value);
+  Future<void> set<T>(T value) => KvHelper.set(name, value);
 
-  void delete() => KvHelper.remove(name);
+  Future<void> delete() => KvHelper.remove(name);
 }
 
 class KvHelper {
@@ -55,24 +56,24 @@ class KvHelper {
     return val;
   }
 
-  static void set<T>(String key, T value) {
+  static Future<void> set<T>(String key, T value) async {
     final data = KeyValue()
       ..key = key
       ..value = jsonEncode({'val': value});
 
-    isar.writeTxnSync(() {
-      isar.collection<KeyValue>().putSync(data);
+    await isar.safeWriteTxn(() async {
+      await isar.collection<KeyValue>().put(data);
     });
   }
 
-  static void remove(String key) {
+  static Future<void> remove(String key) async {
     final col = isar.collection<KeyValue>();
-    final data = col.filter().keyEqualTo(key).findFirstSync();
+    final data = await col.filter().keyEqualTo(key).findFirst();
 
     if (data == null) return;
 
-    isar.writeTxnSync(() {
-      col.deleteSync(data.id);
+    await isar.safeWriteTxn(() async {
+      await col.delete(data.id);
     });
   }
 }

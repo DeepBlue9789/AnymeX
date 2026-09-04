@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:anymex/database/isar_models/custom_list.dart';
 import 'package:anymex/database/isar_models/key_value.dart';
 import 'package:anymex/database/isar_models/offline_media.dart';
+import 'package:anymex/utils/logger.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart'
     hide isar;
 import 'package:isar_community/isar.dart';
@@ -12,12 +14,47 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../main.dart';
 
-class Database {
-  Future<void> init() async {
-    Directory? dir;
-    dir = await getDatabaseDirectory();
+class IsarWriteLock {
+  static Future<void> _lastTxn = Future.value();
 
-    isar = Isar.openSync(
+  static Future<T> synchronized<T>(Future<T> Function() callback) async {
+    final prev = _lastTxn;
+    final completer = Completer<void>();
+    _lastTxn = completer.future;
+
+    try {
+      await prev;
+    } catch (_) {}
+
+    try {
+      return await callback();
+    } finally {
+      completer.complete();
+    }
+  }
+}
+
+extension SafeIsarWrite on Isar {
+  Future<T> safeWriteTxn<T>(Future<T> Function() callback,
+      {bool silent = false}) {
+    if (Zone.current[#isar_in_write_txn] == true) {
+      return callback();
+    }
+    return IsarWriteLock.synchronized(() {
+      if (Zone.current[#isar_in_write_txn] == true) {
+        return callback();
+      }
+      return runZoned(
+        () => writeTxn(() => callback(), silent: silent),
+        zoneValues: {#isar_in_write_txn: true},
+      );
+    });
+  }
+}
+
+class Database {
+  Isar _openIsar(Directory dir) {
+    return Isar.openSync(
       [
         // BS START
         ...AnymeXExtensionBridge.isarSchema,
@@ -28,27 +65,58 @@ class Database {
         OfflineMediaSchema,
         CustomListSchema
       ],
-      directory: dir!.path,
+      directory: dir.path,
       name: 'AnymeX',
       inspector: true,
     );
+  }
 
-    await AnymeXExtensionBridge.init(
-      isarInstance: isar,
-      getDirectory: ({
-        String? subPath,
-        bool useCustomPath = false,
-        bool useSystemPath = false,
-      }) async {
-        final d = Directory(path.join(dir!.path, subPath ?? ''));
-
-        if (!await d.exists()) {
-          await d.create(recursive: true);
+  Future<void> init() async {
+    Directory? dir;
+    try {
+      dir = await getDatabaseDirectory();
+      isar = _openIsar(dir!);
+    } catch (e) {
+      try {
+        dir = await getDatabaseDirectory();
+        final dbFile = File(path.join(dir!.path, 'AnymeX.isar'));
+        final lockFile = File(path.join(dir.path, 'AnymeX.isar.lock'));
+        if (await dbFile.exists()) await dbFile.delete();
+        if (await lockFile.exists()) await lockFile.delete();
+        isar = _openIsar(dir);
+      } catch (e2) {
+        try {
+          final tempDir = await getTemporaryDirectory();
+          dir = Directory(path.join(tempDir.path,
+              'anymex_temp_db_${DateTime.now().millisecondsSinceEpoch}'));
+          await dir.create(recursive: true);
+          isar = _openIsar(dir);
+        } catch (e3) {
+          rethrow;
         }
+      }
+    }
 
-        return d;
-      },
-    );
+    try {
+      await AnymeXExtensionBridge.init(
+        isarInstance: isar,
+        getDirectory: ({
+          String? subPath,
+          bool useCustomPath = false,
+          bool useSystemPath = false,
+        }) async {
+          final d = Directory(path.join(dir!.path, subPath ?? ''));
+
+          if (!await d.exists()) {
+            await d.create(recursive: true);
+          }
+
+          return d;
+        },
+      );
+    } catch (e) {
+      Logger.e(e.toString());
+    }
   }
 
   Future<bool> requestPermission() async {

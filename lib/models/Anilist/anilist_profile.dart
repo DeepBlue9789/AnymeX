@@ -100,6 +100,35 @@ class Profile {
       following: null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'userName': userName,
+      'avatar': {'large': avatar},
+      'bannerImage': cover,
+      'about': about,
+      'aboutMarkdown': aboutMarkdown,
+      'followers': {'pageInfo': {'total': followers}},
+      'following': {'pageInfo': {'total': following}},
+      'donatorTier': donatorTier,
+      'donatorBadge': donatorBadge,
+      'isFollowing': isFollowing,
+      'isFollower': isFollower,
+      'createdAt': createdAt,
+      'mediaListOptions': {
+        'animeList': {
+          'splitCompletedSectionByFormat': splitCompletedAnime,
+          'sectionOrder': animeSectionOrder,
+        },
+        'mangaList': {
+          'splitCompletedSectionByFormat': splitCompletedManga,
+          'sectionOrder': mangaSectionOrder,
+        }
+      }
+    };
+  }
 }
 
 class ProfileFavourites {

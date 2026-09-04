@@ -261,28 +261,6 @@ class _SettingsCommentsState extends State<SettingsComments> {
     );
   }
 
-  void _navigateToModerationPanel() {
-    // Check if user has moderation permissions
-    if (commentumService.currentUserRole.value == 'user') {
-      snackBar('You need moderator or admin permissions to access this panel');
-      return;
-    }
-
-    // Navigate to moderation panel (to be implemented)
-    snackBar('Moderation panel coming soon!');
-  }
-
-  void _navigateToReportsPanel() {
-    // Check if user has moderation permissions
-    if (commentumService.currentUserRole.value == 'user') {
-      snackBar('You need moderator or admin permissions to access this panel');
-      return;
-    }
-
-    // Navigate to reports panel (to be implemented)
-    snackBar('Reports panel coming soon!');
-  }
-
   void _showCommentPreferences() {
     showDialog(
       context: context,

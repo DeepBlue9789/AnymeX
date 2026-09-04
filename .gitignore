@@ -168,3 +168,21 @@ keystore.b64
 # Flutter Version Management (fvm)
 .fvm/
 .vscode/settings.json
+
+# Local workspace artifacts & backups
+AnymeX-main/
+*.apk
+*.mp4
+*.patch
+*.txt
+*.bat
+*.ps1
+*.sh
+check_pb.py
+cleanup_pb.py
+patch_pb_schema.py
+app_config_backup.json
+log
+android/.gradle/
+android/local.properties
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java

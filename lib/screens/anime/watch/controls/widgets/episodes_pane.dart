@@ -113,9 +113,9 @@ class _EpisodeSidePaneState extends State<EpisodeSidePane>
                 ),
               ),
               Positioned(
-                right: 0,
-                top: 0,
-                bottom: 0,
+                right: 14,
+                top: 14 + MediaQuery.of(context).padding.top,
+                bottom: 14 + MediaQuery.of(context).padding.bottom,
                 child: SlideTransition(
                   position: _slideAnimation,
                   child: FadeTransition(
@@ -123,23 +123,29 @@ class _EpisodeSidePaneState extends State<EpisodeSidePane>
                     child: Container(
                       width: context.width *
                           getResponsiveSize(context,
-                              mobileSize: 0.6, desktopSize: 0.4),
-                      height: double.infinity,
+                              mobileSize: 0.65, desktopSize: 0.4),
+                      clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
                         color: widget.backgroundColor ??
                             context.theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: context.theme.colorScheme.outline
+                              .opaque(0.2, iReallyMeanIt: true),
+                          width: 1,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color:
-                                widget.shadowColor ?? Colors.black.opaque(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(-4, 0),
+                                widget.shadowColor ?? Colors.black.opaque(0.35),
+                            blurRadius: 24,
+                            offset: const Offset(-4, 4),
                           ),
                           BoxShadow(
                             color:
-                                context.theme.colorScheme.primary.opaque(0.1),
+                                context.theme.colorScheme.primary.opaque(0.12),
                             blurRadius: 30,
-                            offset: const Offset(-8, 0),
+                            offset: const Offset(-6, 0),
                           ),
                         ],
                       ),

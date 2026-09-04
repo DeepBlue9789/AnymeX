@@ -14,16 +14,18 @@ import 'package:kenburns_nullsafety/kenburns_nullsafety.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
 
 class GradientPoster extends StatelessWidget {
+  final Media? data;
+  final String posterUrl;
+  final String tag;
+  final Widget? topCenterWidget;
+
   const GradientPoster({
     super.key,
     required this.tag,
     required this.data,
     required this.posterUrl,
+    this.topCenterWidget,
   });
-
-  final Media? data;
-  final String posterUrl;
-  final String tag;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +34,7 @@ class GradientPoster extends StatelessWidget {
       alignment: Alignment.bottomCenter,
       children: [
         SizedBox(
-          height: isDesktop ? 460 : 400,
+          height: isDesktop ? 360 : 280,
           child: Obx(() {
             final image = AnymeXImage(
               imageUrl: data?.cover ?? posterUrl,
@@ -56,7 +58,7 @@ class GradientPoster extends StatelessWidget {
           }),
         ),
         Container(
-          height: isDesktop ? 460 : 400,
+          height: isDesktop ? 360 : 280,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -69,7 +71,7 @@ class GradientPoster extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: isDesktop ? 460 : 400,
+          height: isDesktop ? 360 : 280,
           child: Obx(
             () => settingsController.enablePosterKenBurns
                 ? Blur(
@@ -88,9 +90,6 @@ class GradientPoster extends StatelessWidget {
             children: [
               GestureDetector(
                 onTap: () {
-                  snackBar("come-on man, long press it !!!");
-                },
-                onLongPress: () {
                   Get.to(
                     () => VisualsPopup(
                       animeTitle: data?.title ?? 'Unknown',
@@ -105,11 +104,15 @@ class GradientPoster extends StatelessWidget {
                 child: Stack(children: [
                   Hero(
                     tag: tag,
+                    transitionOnUserGestures: true,
+                    flightShuttleBuilder: AnymeXImage.heroFlightShuttleBuilder,
                     child: AnymeXImage(
                         imageUrl: posterUrl,
                         radius: 16.multiplyRoundness(),
-                        width: isDesktop ? 150 : 120,
-                        height: isDesktop ? 200 : 180),
+                        width: isDesktop ? 120 : 100,
+                        height: isDesktop ? 160 : 140,
+                        fadeInDuration: Duration.zero,
+                        fadeOutDuration: Duration.zero),
                   ),
                   if (data?.isAdult ?? false)
                     Positioned(
@@ -191,6 +194,16 @@ class GradientPoster extends StatelessWidget {
             ),
           ),
         ),
+        if (topCenterWidget != null)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 70, // To avoid overlapping with home
+            right: 70, // To avoid overlapping with close
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: topCenterWidget!,
+            ),
+          ),
         Positioned(
           top: MediaQuery.of(context).padding.top + 8,
           right: 20,

@@ -12,10 +12,10 @@ class PageAnimationWrapper extends StatefulWidget {
   const PageAnimationWrapper({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 800),
+    this.duration = const Duration(milliseconds: 250),
     this.delay = Duration.zero,
     this.animationType = AnimationType.slideUp,
-    this.curve = Curves.easeOutCubic,
+    this.curve = Curves.easeOut,
   });
 
   @override

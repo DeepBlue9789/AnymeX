@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:anymex/database/data_keys/keys.dart';
+import 'package:anymex/screens/anime/watch/controls/themes/player_control_themes/cyber_neon_player_control_theme.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/player_control_themes/default_player_control_theme.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/player_control_themes/ios26_player_control_theme.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/player_control_themes/netflix_desktop_player_theme.dart.dart';
@@ -42,6 +43,7 @@ class PlayerControlThemeRegistry {
   static final List<PlayerControlTheme> _builtInThemes = [
     DefaultPlayerControlTheme(),
     Ios26PlayerControlTheme(),
+    CyberNeonPlayerControlTheme(),
     NetflixDesktopPlayerControlTheme(),
     NetflixMobilePlayerControlTheme(),
   ];

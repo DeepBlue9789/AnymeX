@@ -34,7 +34,7 @@ class _HistoryEditorState extends State<HistoryEditor> {
   Stream<List<OfflineMedia>> _historyStream() {
     if (widget.type == ItemType.anime) {
       return offlineStorage.watchAnimeLibrary().map((items) =>
-          items.where((e) => e.currentEpisode?.currentTrack != null).toList()
+          items.where((e) => e.currentEpisode?.timeStampInMilliseconds != null).toList()
             ..sort((a, b) => (b.currentEpisode?.lastWatchedTime ?? 0)
                 .compareTo(a.currentEpisode?.lastWatchedTime ?? 0)));
     }
@@ -137,7 +137,7 @@ class _HistoryEditorState extends State<HistoryEditor> {
   Widget _buildHistoryProgress(OfflineMedia item, ThemeData theme) {
     if (_isAnime) {
       final episode = item.currentEpisode;
-      if (episode?.currentTrack == null) return const SizedBox.shrink();
+      if (episode?.timeStampInMilliseconds == null) return const SizedBox.shrink();
       return _buildEpisodeProgressBar(episode!, theme);
     }
 

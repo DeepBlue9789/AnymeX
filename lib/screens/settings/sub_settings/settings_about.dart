@@ -7,7 +7,6 @@ import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/common/glow.dart';
 import 'package:anymex/widgets/common/policy_sheet.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_animated_logo.dart';
-import 'package:anymex/widgets/non_widgets/snackbar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -296,8 +295,7 @@ class AboutPage extends StatelessWidget {
                         ),
                         CustomListTile(
                           onTap: () async {
-                            snackBar('Checking for updates!');
-                            Get.find<Settings>().checkForUpdates(context);
+                            Get.find<Settings>().checkForUpdates(context, isManual: true);
                           },
                           leading: const Icon(Icons.system_update),
                           title: "Check for Updates",

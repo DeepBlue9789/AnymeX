@@ -27,7 +27,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 class _CategoryItem {
@@ -236,19 +236,22 @@ class _SettingsPageState extends State<SettingsPage> {
     return SuperListView(
       padding: padding,
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color:
-                  Theme.of(context).colorScheme.surfaceContainer.opaque(0.3)),
+            borderRadius: BorderRadius.circular(16),
+            color: Theme.of(context).colorScheme.surfaceContainer.opaque(0.3),
+            border: Border.all(
+              color: context.colors.outline.opaque(0.15, iReallyMeanIt: true),
+            ),
+          ),
           child: Column(
             children: [
               ..._buildCategoryWidgets(),
             ],
           ),
         ),
-        30.height(),
+        16.height(),
       ],
     );
   }
@@ -300,14 +303,12 @@ class _SettingsPageState extends State<SettingsPage> {
           title: "Download Settings",
           description: "Configure parallel downloads and directory",
           destination: () => const SettingsDownloads()),
-
       _CategoryItem(
           icon: Icons.extension_rounded,
           title: "Extensions",
           description: "Extensions tailored to your needs",
           destination: () => const SettingsExtensions(),
           addDividerAbove: true),
-
       _CategoryItem(
           icon: HugeIcons.strokeRoundedFile01,
           title: "Logs",
@@ -327,16 +328,7 @@ class _SettingsPageState extends State<SettingsPage> {
         isDebugOnly: true,
         addDividerAbove: true,
         customTap: () async {
-          final list = Get.find<ExtensionManager>()
-              .installedAnimeExtensions
-              .whereType<CloudStreamSource>()
-              .toList();
-          for (CloudStreamSource i in list) {
-            debugPrint("${i.id} - ${i.internalName} - ${i.jarUrl}");
-            final search =
-                await i.methods.search("Attack on titan", 1, []);
-            print(search.toJson());
-          }
+          print('HELOOO');
         },
       ),
     ];

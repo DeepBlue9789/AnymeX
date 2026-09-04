@@ -30,10 +30,33 @@ class MediaKitPlayer extends base.BasePlayer {
   base.PlayerState _state = base.PlayerState();
   final List<StreamSubscription> _subscriptions = [];
   bool _isDisposed = false;
+  bool _isInitialized = false;
+  bool _isVideoControllerInitialized = false;
+  final GlobalKey _videoKey = GlobalKey();
 
   MediaKitPlayer({base.PlayerConfiguration? configuration})
       : config = configuration ??
-            base.PlayerConfiguration(playerType: base.PlayerType.mediaKit);
+            base.PlayerConfiguration(playerType: base.PlayerType.mediaKit) {
+    _player = Player(
+      configuration: PlayerConfiguration(
+          bufferSize: config.bufferSize > 256 * 1024 * 1024
+              ? 256 * 1024 * 1024
+              : config.bufferSize,
+          libass: config.useLibass,
+          vo: config.videoOutput == 'gpu-next' ? 'gpu-next' : 'gpu'),
+    );
+
+    _videoController = VideoController(
+      _player,
+      configuration: VideoControllerConfiguration(
+        hwdec: config.hwdec,
+        enableHardwareAcceleration: config.hwdec != 'no',
+        androidAttachSurfaceAfterVideoParameters: false,
+      ),
+    );
+    
+    _isVideoControllerInitialized = true;
+  }
 
   @override
   Stream<Duration> get positionStream => _positionController.stream;
@@ -73,21 +96,26 @@ class MediaKitPlayer extends base.BasePlayer {
 
   @override
   Future<void> initialize() async {
-    _player = Player(
-      configuration: PlayerConfiguration(
-          bufferSize: config.bufferSize, libass: config.useLibass, vo: 'gpu'),
-    );
-
-    _videoController = VideoController(
-      _player,
-      configuration: VideoControllerConfiguration(
-        hwdec: config.hwdec,
-        enableHardwareAcceleration: config.hwdec != 'no',
-        androidAttachSurfaceAfterVideoParameters: true,
-      ),
-    );
+    _isInitialized = true;
 
     _setupListeners();
+
+    try {
+      final mpv = _player.platform as dynamic;
+      if (Platform.isAndroid) {
+        await mpv.setProperty("volume-max", "100");
+      }
+      await mpv.setProperty("network-timeout", "30");
+      await mpv.setProperty(
+        "stream-lavf-o",
+        "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,reconnect_on_network_error=1,reconnect_on_http_error=4xx,5xx",
+      );
+      await mpv.setProperty("demuxer-readahead-secs", "30");
+      await mpv.setProperty("force-seekable", "yes");
+    } catch (e) {
+      print('Error setting MPV optimization properties: $e');
+    }
+
     await PlayerCoreVisualSettings.applyMpvCoreSettings(_player);
     await PlayerCoreVisualSettings.applyMpvVisualSettings(_player);
   }
@@ -159,8 +187,13 @@ class MediaKitPlayer extends base.BasePlayer {
       _errorController.add(error);
     }));
 
-    _subscriptions.add(_player.stream.log.listen((error) {
-      Logger.e('Player error: $error');
+    _subscriptions.add(_player.stream.log.listen((log) {
+      if (log.text.contains('Failed to resolve hostname') || 
+          log.text.contains('No address associated with hostname')) {
+        _player.pause();
+        _errorController.add('Network error: Unable to resolve hostname.');
+      }
+      Logger.e('Player log: $log');
     }));
 
     _subscriptions.add(_player.stream.subtitle.listen((subtitles) {
@@ -183,14 +216,14 @@ class MediaKitPlayer extends base.BasePlayer {
     Map<String, String>? headers,
     Duration? startPosition,
   }) async {
-    final resolvedUrl = _resolveMediaUrl(url);
+    final resolvedUrl = resolveMediaUrl(url);
     print('Opening video: $resolvedUrl with headers: $headers');
     await _player.open(
       Media(resolvedUrl, httpHeaders: headers, start: startPosition),
     );
   }
 
-  String _resolveMediaUrl(String url) {
+  String resolveMediaUrl(String url) {
     final uri = Uri.tryParse(url);
     if (uri != null &&
         uri.hasScheme &&
@@ -213,6 +246,11 @@ class MediaKitPlayer extends base.BasePlayer {
   @override
   Future<void> pause() async {
     await _player.pause();
+  }
+
+  @override
+  Future<void> stop() async {
+    await _player.stop();
   }
 
   @override
@@ -247,6 +285,8 @@ class MediaKitPlayer extends base.BasePlayer {
 
   @override
   Future<void> setAudioTrack(base.AudioTrack track) async {
+    if (_isDisposed || !_isInitialized) return;
+
     if (track.id == 'no') {
       await _player.setAudioTrack(AudioTrack.no());
       return;
@@ -272,6 +312,8 @@ class MediaKitPlayer extends base.BasePlayer {
 
   @override
   Future<void> setSubtitleTrack(base.SubtitleTrack track) async {
+    if (_isDisposed || !_isInitialized) return;
+
     if (track.id == 'no') {
       await _player.setSubtitleTrack(SubtitleTrack.no());
       return;
@@ -302,25 +344,14 @@ class MediaKitPlayer extends base.BasePlayer {
 
   @override
   Future<void> setSubtitleDelay(Duration delay) async {
+    if (_isDisposed || !_isInitialized) return;
+
     final seconds = delay.inMicroseconds / 1000000.0;
     (_player.platform as dynamic).setProperty('sub-delay', seconds.toString());
   }
 
   @override
-  Future<Uint8List?> screenshot({
-    bool includeSubtitles = true,
-    String format = 'image/png',
-  }) async {
-    try {
-      return await _player.screenshot(
-        includeLibassSubtitles: includeSubtitles,
-        format: format,
-      );
-    } catch (e) {
-      debugPrint('Screenshot failed: $e');
-      return null;
-    }
-  }
+  bool get isDisposed => _isDisposed;
 
   @override
   Future<void> setHardwareDecoding(String mode) async {
@@ -333,17 +364,32 @@ class MediaKitPlayer extends base.BasePlayer {
     double? width,
     double? height,
   }) {
-    if (_isDisposed) return const SizedBox.shrink();
-
+    if (_isDisposed || !_isInitialized || !_isVideoControllerInitialized) return const SizedBox.shrink();
+    
     return Video(
+      key: _videoKey,
       filterQuality: FilterQuality.medium,
       controls: null,
       controller: _videoController,
       fit: fit ?? BoxFit.contain,
+      fill: Colors.black,
       resumeUponEnteringForegroundMode: true,
       subtitleViewConfiguration:
           SubtitleViewConfiguration(visible: config.useLibass),
     );
+  }
+
+  @override
+  Future<void> refreshFrame() async {
+    if (_isDisposed || !_isInitialized) return;
+    try {
+      final mpv = _player.platform as dynamic;
+      await mpv.command(['seek', '0', 'relative+exact']);
+    } catch (_) {
+      try {
+        await _player.seek(_player.state.position);
+      } catch (_) {}
+    }
   }
 
   @override

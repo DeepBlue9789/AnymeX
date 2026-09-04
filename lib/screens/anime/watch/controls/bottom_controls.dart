@@ -3,57 +3,93 @@ import 'dart:io';
 
 import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
-import 'package:anymex/screens/anime/watch/controls/widgets/bottom_sheet.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/control_button.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/progress_slider.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:get/get.dart';
-import 'package:material_symbols_icons/material_symbols_icons.dart';
 
-class BottomControls extends StatelessWidget {
+class BottomControls extends StatefulWidget {
   const BottomControls({super.key});
 
   @override
+  State<BottomControls> createState() => _BottomControlsState();
+}
+
+class _BottomControlsState extends State<BottomControls> {
+  // Cache the expensive JSON decode so it doesn't run on every reactive rebuild.
+  // Re-parsed only when the settings value actually changes.
+  List<String> _leftButtonIds = [];
+  List<String> _rightButtonIds = [];
+  Map<String, dynamic> _buttonConfigs = {};
+  String _cachedJsonString = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _parseButtonConfig();
+  }
+
+  void _parseButtonConfig() {
+    final jsonString = PlayerUiKeys.bottomControlsSettings.get<String>('{}');
+    if (jsonString == _cachedJsonString) return;
+    _cachedJsonString = jsonString;
+    try {
+      final decoded = json.decode(jsonString) as Map<String, dynamic>;
+      _leftButtonIds = List<String>.from(decoded['leftButtonIds'] ?? []);
+      _rightButtonIds = List<String>.from(decoded['rightButtonIds'] ?? []);
+      _buttonConfigs = Map<String, dynamic>.from(decoded['buttonConfigs'] ?? {});
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Re-check config in case it changed while the widget was alive.
+    _parseButtonConfig();
+
     final controller = Get.find<PlayerController>();
     final isDesktop = !Platform.isAndroid && !Platform.isIOS;
 
     return Obx(() {
       if (controller.isLocked.value) {
-        if (!controller.showControls.value) {
-          return const SizedBox.shrink();
-        }
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black.withValues(alpha: 0.8),
-              ],
-            ),
-          ),
-          child: SafeArea(
-            top: false,
-            left: false,
-            right: false,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isDesktop ? 32 : 20,
-                vertical: isDesktop ? 24 : 8,
+        final show = controller.showControls.value;
+        return AnimatedOpacity(
+          opacity: show ? 1.0 : 0.0,
+          duration: controller.overlayAnimationDuration(300),
+          child: IgnorePointer(
+            ignoring: !show,
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.8),
+                  ],
+                ),
               ),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Opacity(
-                  opacity: 0.7,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
-                    child: const ProgressSlider(),
+              child: SafeArea(
+                top: false,
+                left: false,
+                right: false,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isDesktop ? 32 : 20,
+                    vertical: isDesktop ? 24 : 8,
+                  ),
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: Opacity(
+                      opacity: 0.7,
+                      child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
+                        child: const ProgressSlider(),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -135,15 +171,14 @@ class BottomControls extends StatelessWidget {
     final theme = context.theme;
     final isDark = theme.brightness == Brightness.dark;
 
+    // Only watch the coarse state changes (active/inactive, interval identity).
+    // The countdown progress animation is handled inside _CountdownProgressBar,
+    // which has its own Obx isolated by a RepaintBoundary — so the outer
+    // Material/InkWell/Container does NOT rebuild every second.
     return Obx(() {
       final isCountdownActive = controller.isAutoSkipCountdownActive;
       final interval = controller.currentSkipInterval.value;
       final inSegment = interval != null || isCountdownActive;
-      final progress = isCountdownActive
-          ? 1.0 -
-              (controller.autoSkipCountdownRemaining.value /
-                  PlayerController.autoSkipCountdownSeconds)
-          : 0.0;
 
       return Material(
         borderRadius: BorderRadius.circular(16),
@@ -169,24 +204,12 @@ class BottomControls extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
+                // Isolated fill bar — only this widget rebuilds each second.
                 if (isCountdownActive)
                   Positioned.fill(
-                    child: TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 1000),
-                      curve: Curves.linear,
-                      tween: Tween<double>(begin: 0.0, end: progress),
-                      builder: (context, value, child) {
-                        return FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: value,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary
-                                  .withValues(alpha: 0.25),
-                            ),
-                          ),
-                        );
-                      },
+                    child: _CountdownProgressBar(
+                      controller: controller,
+                      fillColor: theme.colorScheme.primary.withValues(alpha: 0.25),
                     ),
                   ),
                 Padding(
@@ -225,22 +248,57 @@ class BottomControls extends StatelessWidget {
       );
     });
   }
+}
 
+/// A self-contained fill bar for the skip countdown.
+/// Keeps its own Obx that only watches [autoSkipCountdownRemaining] so
+/// the parent skip-button widget never rebuilds on each countdown tick.
+class _CountdownProgressBar extends StatelessWidget {
+  final PlayerController controller;
+  final Color fillColor;
+
+  const _CountdownProgressBar({
+    required this.controller,
+    required this.fillColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: Obx(() {
+        final remaining = controller.autoSkipCountdownRemaining.value;
+        final progress = 1.0 -
+            (remaining / PlayerController.autoSkipCountdownSeconds);
+        return TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 950),
+          curve: Curves.linear,
+          tween: Tween<double>(begin: progress - (1.0 / PlayerController.autoSkipCountdownSeconds), end: progress),
+          builder: (context, value, _) {
+            return FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: value.clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(color: fillColor),
+              ),
+            );
+          },
+        );
+      }),
+    );
+  }
+}
+
+// _buildLayout lives back in _BottomControlsState — it accesses _leftButtonIds etc.
+extension _BottomControlsStateLayout on _BottomControlsState {
   Widget _buildLayout(BuildContext context) {
     final controller = Get.find<PlayerController>();
     final theme = context.theme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final String jsonString =
-        PlayerUiKeys.bottomControlsSettings.get<String>('{}');
-    final Map<String, dynamic> decodedConfig = json.decode(jsonString);
-
-    final List<String> leftButtonIds =
-        List<String>.from(decodedConfig['leftButtonIds'] ?? []);
-    final List<String> rightButtonIds =
-        List<String>.from(decodedConfig['rightButtonIds'] ?? []);
-    final Map<String, dynamic> buttonConfigs =
-        Map<String, dynamic>.from(decodedConfig['buttonConfigs'] ?? {});
+    // Use the cached config — no JSON decode on every rebuild.
+    final List<String> leftButtonIds = _leftButtonIds;
+    final List<String> rightButtonIds = _rightButtonIds;
+    final Map<String, dynamic> buttonConfigs = _buttonConfigs;
 
     bool isVisible(String id) =>
         (buttonConfigs[id]?['visible'] as bool?) ?? true;
@@ -249,7 +307,7 @@ class BottomControls extends StatelessWidget {
 
     final Map<String, Widget> buttonWidgets = {
       'playlist': ControlButton(
-        icon: Symbols.playlist_play_rounded,
+        icon: Icons.playlist_play_rounded,
         onPressed: () {
           controller.isEpisodePaneOpened.value =
               !controller.isEpisodePaneOpened.value;
@@ -258,13 +316,13 @@ class BottomControls extends StatelessWidget {
         compact: true,
       ),
       'shaders': ControlButton(
-        icon: Symbols.tune_rounded,
+        icon: Icons.tune_rounded,
         onPressed: () => controller.openColorProfileBottomSheet(context),
         tooltip: 'Shaders & Color Profiles',
         compact: true,
       ),
       'source': ControlButton(
-        icon: Symbols.cloud_rounded,
+        icon: Icons.cloud_rounded,
         onPressed: () {
           controller.isSourcePaneOpened.value =
               !controller.isSourcePaneOpened.value;
@@ -273,7 +331,7 @@ class BottomControls extends StatelessWidget {
         compact: true,
       ),
       'tracks': ControlButton(
-        icon: Symbols.library_music_rounded,
+        icon: Icons.library_music_rounded,
         onPressed: () {
           controller.isTracksPaneOpened.value =
               !controller.isTracksPaneOpened.value;
@@ -282,7 +340,7 @@ class BottomControls extends StatelessWidget {
         compact: true,
       ),
       'sync_subs': ControlButton(
-        icon: Symbols.sync_rounded,
+        icon: Icons.sync_rounded,
         onPressed: () {
           controller.isSyncSubsPaneOpened.value =
               !controller.isSyncSubsPaneOpened.value;
@@ -291,20 +349,27 @@ class BottomControls extends StatelessWidget {
         compact: true,
       ),
       'speed': ControlButton(
-        icon: Symbols.speed_rounded,
-        onPressed: () =>
-            PlayerBottomSheets.showPlaybackSpeed(context, controller),
+        icon: Icons.speed_rounded,
+        onPressed: () {
+          controller.isSpeedPaneOpened.value =
+              !controller.isSpeedPaneOpened.value;
+        },
         tooltip: 'Speed',
         compact: true,
       ),
-      'orientation': ControlButton(
-        icon: Icons.screen_rotation_rounded,
-        onPressed: () => controller.toggleOrientation(),
-        tooltip: 'Toggle Orientation',
-        compact: true,
-      ),
+      'orientation': Obx(() {
+        final autoRotate = controller.isLandscapeAutoRotateEnabled.value;
+        return ControlButton(
+          icon: autoRotate
+              ? Icons.screen_rotation_alt_rounded
+              : Icons.screen_lock_rotation_rounded,
+          onPressed: () => controller.toggleLandscapeAutoRotate(),
+          tooltip: autoRotate ? 'Auto-rotate ON' : 'Auto-rotate OFF',
+          compact: true,
+        );
+      }),
       'aspect_ratio': ControlButton(
-        icon: Symbols.fit_screen,
+        icon: Icons.fit_screen_rounded,
         onPressed: () => controller.toggleVideoFit(),
         onLongPress: controller.resetVideoFit,
         tooltip: 'Aspect Ratio',
@@ -332,7 +397,7 @@ class BottomControls extends StatelessWidget {
 
         final widget = buttonWidgets[id];
         if (widget != null) {
-          if (widget is ControlButton && widget.compact) {
+          if ((widget is ControlButton && widget.compact) || id == 'orientation') {
             compactButtons.add(widget);
           } else {
             regularButtons.add(widget);
@@ -367,7 +432,8 @@ class BottomControls extends StatelessWidget {
     final leftButtons = buildButtonList(leftButtonIds);
     final rightButtons = buildButtonList(rightButtonIds);
 
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
 
     if (isPortrait) {
       return Column(
@@ -405,14 +471,16 @@ class BottomControls extends StatelessWidget {
                       width: 0.5,
                     ),
                   ),
-                  child: Obx(() => Text(
-                        controller.formattedCurrentPosition,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      )),
+                  child: RepaintBoundary(
+                    child: Obx(() => Text(
+                          controller.formattedCurrentPosition,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        )),
+                  ),
                 ),
                 Container(
                   padding:
@@ -429,14 +497,16 @@ class BottomControls extends StatelessWidget {
                       width: 0.5,
                     ),
                   ),
-                  child: Obx(() => Text(
-                        controller.formattedEpisodeDuration,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      )),
+                  child: RepaintBoundary(
+                    child: Obx(() => Text(
+                          controller.formattedEpisodeDuration,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        )),
+                  ),
                 ),
               ],
             ),
@@ -496,14 +566,16 @@ class BottomControls extends StatelessWidget {
                         width: 0.5,
                       ),
                     ),
-                    child: Obx(() => Text(
-                          controller.formattedCurrentPosition,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        )),
+                    child: RepaintBoundary(
+                      child: Obx(() => Text(
+                            controller.formattedCurrentPosition,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          )),
+                    ),
                   ),
                   if (leftButtons.isNotEmpty) const SizedBox(width: 16),
                   ...leftButtons,
@@ -529,14 +601,16 @@ class BottomControls extends StatelessWidget {
                         width: 0.5,
                       ),
                     ),
-                    child: Obx(() => Text(
-                          controller.formattedEpisodeDuration,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        )),
+                    child: RepaintBoundary(
+                      child: Obx(() => Text(
+                            controller.formattedEpisodeDuration,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          )),
+                    ),
                   ),
                 ],
               ),

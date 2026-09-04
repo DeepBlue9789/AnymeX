@@ -86,10 +86,7 @@ class MediaPeekPopup extends StatefulWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.colors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => MediaPeekPopup(
         media: media,
         type: type,
@@ -160,9 +157,9 @@ class _MediaPeekPopupState extends State<MediaPeekPopup> {
     service.setCurrentMedia(widget.media.id.toString(), isManga: isManga);
     final tracked = service.currentMedia.value;
     _currentMedia = service.currentMedia;
-    _animeStatus = (tracked.watchingStatus ?? '').obs;
-    _animeScore = (double.tryParse(tracked.score ?? '') ?? 0.0).obs;
-    _animeProgress = (int.tryParse(tracked.episodeCount ?? '') ?? 0).obs;
+    _animeStatus = (tracked?.watchingStatus ?? '').obs;
+    _animeScore = (double.tryParse(tracked?.score ?? '') ?? 0.0).obs;
+    _animeProgress = (int.tryParse(tracked?.episodeCount ?? '') ?? 0).obs;
   }
 
   Future<void> _loadVotes() async {

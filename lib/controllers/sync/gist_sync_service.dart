@@ -74,17 +74,30 @@ const _kRetryDelay = Duration(seconds: 2);
 
 Future<http.Response> _withRetry(
   Future<http.Response> Function() attempt,
-  String label,
-) async {
-  try {
-    final resp = await attempt().timeout(_kRequestTimeout);
-    if (resp.statusCode < 500) return resp;
-    Logger.i('[GistSync] $label returned ${resp.statusCode}, retrying…');
-  } catch (e) {
-    Logger.i('[GistSync] $label failed ($e), retrying…');
+  String label, {
+  int maxRetries = 3,
+}) async {
+  int retries = 0;
+  Duration delay = const Duration(seconds: 2);
+
+  while (true) {
+    try {
+      final resp = await attempt().timeout(const Duration(seconds: 10));
+      if (resp.statusCode < 500) return resp;
+      if (retries >= maxRetries) return resp;
+      Logger.i('[GistSync] $label returned ${resp.statusCode}, retrying in ${delay.inSeconds}s…');
+    } catch (e) {
+      if (retries >= maxRetries) {
+        Logger.e('[GistSync] $label failed after $maxRetries retries ($e)');
+        rethrow;
+      }
+      Logger.i('[GistSync] $label failed ($e), retrying in ${delay.inSeconds}s…');
+    }
+    
+    await Future<void>.delayed(delay);
+    retries++;
+    delay *= 2; // Exponential backoff
   }
-  await Future<void>.delayed(_kRetryDelay);
-  return attempt().timeout(_kRequestTimeout);
 }
 
 Future<http.Response> _resilientGet(

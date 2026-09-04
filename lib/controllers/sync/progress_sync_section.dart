@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:anymex/controllers/sync/gist_sync_controller.dart';
+import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/utils/logger.dart';
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
@@ -10,7 +11,7 @@ import 'package:anymex/widgets/non_widgets/snackbar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ProgressSyncSection extends StatelessWidget {
@@ -20,22 +21,65 @@ class ProgressSyncSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctrl = Get.find<GistSyncController>();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4.0),
-          child: AnymexText(
-            text: 'PROGRESS SYNC',
+    return Obx(() {
+      final activeProvider = ctrl.syncProvider.value;
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          const AnymexText(
+            text: 'Sync Provider',
             variant: TextVariant.bold,
-            color: context.colors.onSurfaceVariant.withOpacity(0.7),
-            size: 12,
+            size: 14,
           ),
-        ),
-        const SizedBox(height: 12),
-        _GistSyncCard(ctrl: ctrl),
-      ],
-    );
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _ProviderChip(
+                label: 'GitHub Gist',
+                icon: Icons.code_rounded,
+                isSelected: activeProvider == 'github',
+                onTap: () => ctrl.setSyncProvider('github'),
+              ),
+              const SizedBox(width: 8),
+              _ProviderChip(
+                label: 'PocketBase',
+                icon: Icons.dns_rounded,
+                isSelected: activeProvider == 'pocketbase',
+                onTap: () => ctrl.setSyncProvider('pocketbase'),
+              ),
+              const SizedBox(width: 8),
+              _ProviderChip(
+                label: 'Disabled',
+                icon: Icons.sync_disabled_rounded,
+                isSelected: activeProvider == 'none',
+                onTap: () => ctrl.setSyncProvider('none'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (activeProvider == 'github')
+            _GistSyncCard(ctrl: ctrl)
+          else if (activeProvider == 'pocketbase')
+            _PocketBaseSyncCard(ctrl: ctrl)
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: context.colors.surfaceContainerLow.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const AnymexText(
+                text: 'Cloud sync is currently disabled.',
+                variant: TextVariant.regular,
+                size: 13,
+              ),
+            ),
+        ],
+      );
+    });
   }
 }
 
@@ -1256,4 +1300,370 @@ class _DeleteGistConfirmDialogState extends State<_DeleteGistConfirmDialog> {
       ],
     );
   }
+}
+
+class _ProviderChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ProviderChip({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? colors.primaryContainer
+                : colors.surfaceContainerLow.withOpacity(0.4),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? colors.primary
+                  : colors.outlineVariant.withOpacity(0.2),
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? colors.onPrimaryContainer
+                    : colors.onSurfaceVariant,
+              ),
+              const SizedBox(height: 4),
+              AnymexText(
+                text: label,
+                size: 11,
+                variant: isSelected ? TextVariant.bold : TextVariant.regular,
+                color: isSelected
+                    ? colors.onPrimaryContainer
+                    : colors.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PocketBaseSyncCard extends StatefulWidget {
+  final GistSyncController ctrl;
+  const _PocketBaseSyncCard({required this.ctrl});
+
+  @override
+  State<_PocketBaseSyncCard> createState() => _PocketBaseSyncCardState();
+}
+
+class _PocketBaseSyncCardState extends State<_PocketBaseSyncCard> {
+  late final TextEditingController _urlCtrl;
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _passCtrl;
+  bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlCtrl = TextEditingController(text: widget.ctrl.pocketbaseUrl.value);
+    _emailCtrl =
+        TextEditingController(text: widget.ctrl.pocketbaseEmail.value);
+    _passCtrl =
+        TextEditingController(text: widget.ctrl.pocketbasePassword.value);
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Obx(() {
+      final isConnected = widget.ctrl.isPocketbaseConnected.value;
+      final isBusy = widget.ctrl.isAuthenticating.value;
+
+      return Container(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerLow.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isConnected
+                ? colors.primary.withOpacity(0.45)
+                : colors.outlineVariant.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isConnected
+                        ? colors.primaryContainer
+                        : colors.surfaceContainerHigh,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.dns_rounded,
+                    color: isConnected
+                        ? colors.onPrimaryContainer
+                        : colors.onSurfaceVariant,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: AnymexText(
+                    text: 'PocketBase Sync',
+                    variant: TextVariant.semiBold,
+                    size: 16,
+                  ),
+                ),
+                _StatusPill(
+                  label: isConnected ? 'Connected' : 'Not Connected',
+                  color: isConnected ? colors.primary : colors.error,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _urlCtrl,
+              decoration: InputDecoration(
+                labelText: 'Server URL',
+                hintText: 'http://192.168.1.50:8090',
+                prefixIcon: const Icon(Icons.link_rounded),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (v) => widget.ctrl.pocketbaseUrl.value = v,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _emailCtrl,
+              decoration: InputDecoration(
+                labelText: 'Email / Username',
+                hintText: 'user@example.com',
+                prefixIcon: const Icon(Icons.person_outline_rounded),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (v) => widget.ctrl.pocketbaseEmail.value = v,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _passCtrl,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                ),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (v) => widget.ctrl.pocketbasePassword.value = v,
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            await widget.ctrl.loginPocketbase(
+                              url: _urlCtrl.text,
+                              email: _emailCtrl.text,
+                              password: _passCtrl.text,
+                            );
+                          },
+                    icon: isBusy
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: colors.onPrimary),
+                          )
+                        : const Icon(Icons.login_rounded),
+                    label: Text(isConnected ? 'Re-connect' : 'Connect'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: isBusy
+                        ? null
+                        : () => widget.ctrl.testPocketbaseConnection(),
+                    icon: const Icon(Icons.check_circle_outline_rounded),
+                    label: const Text('Test Setup'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: isConnected
+                    ? () => _showPocketBaseManageSheet(context, widget.ctrl)
+                    : null,
+                icon: const Icon(Icons.storage_rounded),
+                label: const Text('Manage Database'),
+              ),
+            ),
+            if (isConnected) ...[
+              const SizedBox(height: 16),
+              AnymexText(
+                text: 'Sync Preferences',
+                size: 12,
+                variant: TextVariant.bold,
+                color: colors.onSurfaceVariant,
+              ),
+              const SizedBox(height: 8),
+              _SyncPreferenceTile(
+                icon: Icons.sync_rounded,
+                title: 'Auto-sync progress',
+                subtitle: 'Sync watch/read progress automatically',
+                value: widget.ctrl.syncEnabled.value,
+                onChanged: (v) => widget.ctrl.syncEnabled.value = v,
+              ),
+              const SizedBox(height: 8),
+              _SyncPreferenceTile(
+                icon: Icons.history_rounded,
+                title: 'Sync Local History across devices',
+                subtitle:
+                    'Sync homepage continue-watching history using PocketBase',
+                value: widget.ctrl.pocketbaseAutoSyncHistory.value,
+                onChanged: (v) {
+                  widget.ctrl.pocketbaseAutoSyncHistory.value = v;
+                  SyncKeys.pocketbaseAutoSyncHistory.set(v);
+                },
+              ),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+}
+
+void _showPocketBaseManageSheet(
+    BuildContext context, GistSyncController ctrl) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: context.colors.surface,
+    builder: (ctx) => Obx(
+      () => Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 10, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ctx.colors.outlineVariant.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const AnymexText(
+                text: 'Manage PocketBase Database',
+                variant: TextVariant.bold,
+                size: 18,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: ctx.colors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnymexText(
+                      text: 'Server: ${ctrl.pocketbaseUrl.value}',
+                      size: 13,
+                      variant: TextVariant.semiBold,
+                    ),
+                    const SizedBox(height: 4),
+                    AnymexText(
+                      text: 'User: ${ctrl.pocketbaseEmail.value}',
+                      size: 12,
+                      color: ctx.colors.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await ctrl.pullLocalHistoryNow();
+                  },
+                  icon: const Icon(Icons.sync_rounded),
+                  label: const Text('Fetch Remote History Now'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ctx.colors.error,
+                    side: BorderSide(color: ctx.colors.error.withOpacity(0.5)),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await ctrl.clearPocketbaseData();
+                  },
+                  icon: const Icon(Icons.delete_forever_rounded),
+                  label: const Text('Clear Remote Database'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

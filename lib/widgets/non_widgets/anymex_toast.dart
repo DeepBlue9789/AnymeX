@@ -13,6 +13,7 @@ class AnymexToast {
   static void show({
     required String message,
     Duration duration = const Duration(seconds: 2),
+    bool showIcon = true,
   }) {
     final context = Get.context;
     if (context == null) return;
@@ -27,19 +28,21 @@ class AnymexToast {
 
     final controller = Get.showSnackbar(
       GetSnackBar(
-        snackPosition:
-            context.isPortrait ? SnackPosition.BOTTOM : SnackPosition.TOP,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.transparent,
         padding: EdgeInsets.zero,
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
         duration: duration,
+        onTap: (_) {
+          Get.closeCurrentSnackbar();
+        },
         messageText: Column(
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainer,
-                borderRadius: BorderRadius.circular(12),
+                color: colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.opaque(0.08),
@@ -51,24 +54,26 @@ class AnymexToast {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary.opaque(0.12),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(30),
-                      child: AnymeXAnimatedLogo(
-                        size: 28,
-                        autoPlay: true,
-                        color: colorScheme.primary,
+                  if (showIcon) ...[
+                    Container(
+                      width: 32,
+                      height: 32,
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.opaque(0.12),
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: AnymeXAnimatedLogo(
+                          size: 28,
+                          autoPlay: true,
+                          color: colorScheme.primary,
+                        ),
                       ),
                     ),
-                  ),
-                  12.width(),
+                    12.width(),
+                  ],
                   Flexible(
                     child: AnymexText(
                       text: message,

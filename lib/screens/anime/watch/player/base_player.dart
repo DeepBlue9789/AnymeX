@@ -41,6 +41,8 @@ abstract class BasePlayer {
 
   Future<void> pause();
 
+  Future<void> stop();
+
   Future<void> playOrPause();
 
   Future<void> setRate(double rate);
@@ -57,10 +59,7 @@ abstract class BasePlayer {
 
   Future<void> toggleVideoFit(BoxFit fit);
 
-  Future<Uint8List?> screenshot({
-    bool includeSubtitles = true,
-    String format = 'image/png',
-  });
+  bool get isDisposed;
 
   Future<void> dispose();
 
@@ -69,6 +68,8 @@ abstract class BasePlayer {
     double? width,
     double? height,
   });
+
+  Future<void> refreshFrame();
 
   Future<void> setHardwareDecoding(String mode);
 }
@@ -232,6 +233,7 @@ class PlayerConfiguration {
   final int bufferSize;
   final bool useLibass;
   final String hwdec;
+  final String videoOutput;
   final PlayerType playerType;
   final bool enableCache;
   final bool autoPlay;
@@ -242,6 +244,7 @@ class PlayerConfiguration {
     this.bufferSize = 1024 * 1024 * 32,
     this.useLibass = false,
     this.hwdec = 'no',
+    this.videoOutput = 'auto',
     this.playerType = PlayerType.mediaKit,
     this.enableCache = true,
     this.autoPlay = true,

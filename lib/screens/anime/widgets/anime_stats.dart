@@ -587,63 +587,13 @@ class AnimeStats extends StatelessWidget {
     final colorScheme = context.colors;
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.opaque(0.4),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: colorScheme.outline.opaque(0.2),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.opaque(0.15, iReallyMeanIt: true),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  size: 24,
-                  color: colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              AnymexText(
-                text: title,
-                variant: TextVariant.bold,
-                size: 20,
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required Widget content,
-  }) {
-    final colorScheme = context.colors;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.opaque(0.35),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outline.opaque(0.15, iReallyMeanIt: true),
-          width: 1.5,
+          width: 1.0,
         ),
       ),
       child: Column(
@@ -663,7 +613,7 @@ class AnimeStats extends StatelessWidget {
                   color: colorScheme.primary,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               AnymexText(
                 text: title,
                 variant: TextVariant.bold,
@@ -672,6 +622,56 @@ class AnimeStats extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required Widget content,
+  }) {
+    final colorScheme = context.colors;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.opaque(0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outline.opaque(0.15, iReallyMeanIt: true),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.opaque(0.15, iReallyMeanIt: true),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              AnymexText(
+                text: title,
+                variant: TextVariant.bold,
+                size: 14,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           content,
         ],
       ),
@@ -730,22 +730,22 @@ class AnimeStats extends StatelessWidget {
       header: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: colorScheme.primary.opaque(0.15, iReallyMeanIt: true),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
-              size: 24,
+              size: 18,
               color: colorScheme.primary,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           AnymexText(
             text: title,
             variant: TextVariant.bold,
-            size: 20,
+            size: 16,
           ),
         ],
       ),
@@ -827,9 +827,9 @@ class AnimeStats extends StatelessWidget {
       itemCount: stats.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        mainAxisExtent: 75,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        mainAxisExtent: 65,
       ),
       itemBuilder: (context, index) {
         final stat = stats[index];
@@ -837,10 +837,10 @@ class AnimeStats extends StatelessWidget {
         return GestureDetector(
           onTap: onTap != null ? () => onTap() : null,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: colorScheme.surface.opaque(0.4),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: colorScheme.primary.opaque(0.1),
                 width: 1,

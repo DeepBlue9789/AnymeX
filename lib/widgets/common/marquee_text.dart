@@ -64,25 +64,17 @@ class MarqueeText extends StatelessWidget {
         )..layout(maxWidth: double.infinity);
 
         final availableWidth = constraints.maxWidth;
-        final bool shouldScroll = intrinsicPainter.width >= availableWidth - 1.5;
 
-        if (shouldScroll) {
+        if (intrinsicPainter.width > availableWidth) {
           return SizedBox(
             height: intrinsicPainter.height,
             width: availableWidth,
             child: Marquee(
               text: displayText,
               style: effectiveStyle,
-              scrollAxis: Axis.horizontal,
-              crossAxisAlignment: CrossAxisAlignment.center,
               blankSpace: 30.0,
               velocity: 30.0,
               pauseAfterRound: const Duration(seconds: 2),
-              startPadding: 0.0,
-              accelerationDuration: const Duration(milliseconds: 500),
-              accelerationCurve: Curves.easeIn,
-              decelerationDuration: const Duration(milliseconds: 500),
-              decelerationCurve: Curves.easeOut,
             ),
           );
         }

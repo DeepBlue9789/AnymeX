@@ -197,11 +197,11 @@ Episode DEpisodeToEpisode(DEpisode chapter) {
 
 String calcTime(String timestamp, {String format = "dd-MM-yyyy"}) {
   if (timestamp.trim().isEmpty) return "";
-  
+
   DateTime? dateTime;
   final cleanTimestamp = timestamp.trim();
   final parsedInt = int.tryParse(cleanTimestamp);
-  
+
   if (parsedInt != null) {
     if (cleanTimestamp.length == 10) {
       dateTime = DateTime.fromMillisecondsSinceEpoch(parsedInt * 1000);
@@ -219,11 +219,11 @@ String calcTime(String timestamp, {String format = "dd-MM-yyyy"}) {
   } else {
     dateTime = DateTime.tryParse(cleanTimestamp);
   }
-  
+
   if (dateTime == null) {
     return timestamp;
   }
-  
+
   final now = DateTime.now();
   final difference = now.difference(dateTime);
 
@@ -442,6 +442,7 @@ String formatTimeAgo(int millisecondsSinceEpoch) {
 Media convertOfflineToMedia(OfflineMedia offlineMedia) {
   return Media(
       id: offlineMedia.mediaId ?? '0',
+      idMal: offlineMedia.idMal ?? '0',
       romajiTitle: offlineMedia.jname ?? '',
       title: offlineMedia.english ?? offlineMedia.name ?? '',
       description: offlineMedia.description ?? '',
@@ -629,7 +630,51 @@ Future<bool> isTv() async {
 }
 
 Future<void> navigate(dynamic page) async {
-  await Navigator.push(Get.context!, MaterialPageRoute(builder: (c) => page()));
+  await Navigator.push(
+    Get.context!,
+    PageRouteBuilder(
+      pageBuilder: (context, animation, secondaryAnimation) => page(),
+      transitionDuration: const Duration(milliseconds: 250),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curve = Curves.easeOutCubic;
+        final fadeAnim = CurvedAnimation(parent: animation, curve: curve);
+        final scaleAnim = Tween<double>(begin: 0.96, end: 1.0).animate(fadeAnim);
+        
+        return FadeTransition(
+          opacity: fadeAnim,
+          child: ScaleTransition(
+            scale: scaleAnim,
+            child: child,
+          ),
+        );
+      },
+    ),
+  );
+}
+
+Future<void> navigateWithAnimation(dynamic page) async {
+  await Navigator.push(
+    Get.context!,
+    PageRouteBuilder(
+      pageBuilder: (context, animation, secondaryAnimation) => page(),
+      transitionDuration: const Duration(milliseconds: 250),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curve = Curves.easeOutCubic;
+        final fadeAnim = CurvedAnimation(parent: animation, curve: curve);
+        final scaleAnim = Tween<double>(begin: 0.95, end: 1.0).animate(fadeAnim);
+        
+        return FadeTransition(
+          opacity: fadeAnim,
+          child: ScaleTransition(
+            scale: scaleAnim,
+            child: child,
+          ),
+        );
+      },
+    ),
+  );
 }
 
 Future<void> navigateWithSlide(dynamic page) async {
@@ -637,11 +682,11 @@ Future<void> navigateWithSlide(dynamic page) async {
     Get.context!,
     PageRouteBuilder(
       pageBuilder: (context, animation, secondaryAnimation) => page(),
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 250),
+      transitionDuration: const Duration(milliseconds: 250),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final offsetAnim = Tween<Offset>(
-          begin: const Offset(0, 0.08),
+          begin: const Offset(0, 0.05),
           end: Offset.zero,
         ).animate(CurvedAnimation(
           parent: animation,

@@ -101,7 +101,7 @@ class BetterEpisode extends StatelessWidget {
   ) {
     return Container(
       clipBehavior: Clip.antiAlias,
-      height: 100,
+      height: 75,
       decoration: BoxDecoration(
         color: _getBackgroundColor(context, isFiller),
         borderRadius: BorderRadius.circular(12),
@@ -110,7 +110,11 @@ class BetterEpisode extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _buildImageSection(context, progress, hasProgress, isCompact: true),
+          SizedBox(
+            width: 130,
+            height: 75,
+            child: _buildImageSection(context, progress, hasProgress, isCompact: true),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -157,56 +161,51 @@ class BetterEpisode extends StatelessWidget {
         border:
             isFiller ? Border.all(color: Colors.orange.withOpacity(0.3)) : null,
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 170,
-                height: 100,
-                child: _buildImageSection(context, progress, hasProgress),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (isFiller)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4.0),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                  color: Colors.orange.withOpacity(0.5))),
-                          child: const AnymexText(
-                            text: "FILLER",
-                            size: 10,
-                            color: Colors.orange,
-                            variant: TextVariant.bold,
-                          ),
-                        ),
-                      ),
-                    AnymexText(
-                      text: episodeTitle,
-                      variant: TextVariant.bold,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      isMarquee: true,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          SizedBox(
+            width: 130,
+            height: 80,
+            child: _buildImageSection(context, progress, hasProgress),
           ),
-          const SizedBox(height: 15),
-          _buildDescription(context),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                if (isFiller)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: Colors.orange.withOpacity(0.5))),
+                      child: const AnymexText(
+                        text: "FILLER",
+                        size: 10,
+                        color: Colors.orange,
+                        variant: TextVariant.bold,
+                      ),
+                    ),
+                  ),
+                AnymexText(
+                  text: episodeTitle,
+                  variant: TextVariant.bold,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  isMarquee: true,
+                ),
+                const SizedBox(height: 4),
+                _buildDescription(context),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -218,29 +217,26 @@ class BetterEpisode extends StatelessWidget {
     bool hasProgress, {
     bool isCompact = false,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const imageWidth = 170.0;
+    const imageWidth = 130.0;
 
-        return Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(isCompact ? 12 : 12),
-              child: _OptimizedNetworkImage(
-                imageUrl: _imageUrl,
-                width: imageWidth,
-                height: isCompact ? double.infinity : 100,
-                fallbackUrl: fallbackImageUrl,
-              ),
-            ),
-            if (hasProgress) ...[
-              _buildProgressIndicator(context, progress, imageWidth, isCompact),
-              _buildWatchedIcon(context),
-            ],
-            _buildEpisodeNumberBadge(context),
-          ],
-        );
-      },
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: _OptimizedNetworkImage(
+            imageUrl: _imageUrl,
+            width: double.infinity,
+            height: double.infinity,
+            fallbackUrl: fallbackImageUrl,
+          ),
+        ),
+        if (hasProgress) ...[
+          _buildProgressIndicator(context, progress, imageWidth, isCompact),
+          _buildWatchedIcon(context),
+        ],
+        _buildEpisodeNumberBadge(context),
+      ],
     );
   }
 
@@ -293,7 +289,7 @@ class BetterEpisode extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
               color: Colors.black.opaque(0.2),
@@ -313,6 +309,7 @@ class BetterEpisode extends StatelessWidget {
               text: "EP $episodeNumber",
               variant: TextVariant.bold,
               color: Colors.white,
+              size: 11,
             ),
           ),
         ),
@@ -326,13 +323,65 @@ class BetterEpisode extends StatelessWidget {
         ? 'No Description Available'
         : description!;
 
-    return AnymexText(
-      text: displayText,
-      variant: TextVariant.regular,
-      maxLines: 3,
+    return _ExpandableDescription(displayText, context);
+  }
+}
+
+class _ExpandableDescription extends StatefulWidget {
+  final String description;
+  final BuildContext context;
+  const _ExpandableDescription(this.description, this.context);
+
+  @override
+  State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<_ExpandableDescription> {
+  bool isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textStyle = TextStyle(
+      fontSize: 11,
+      fontFamily: 'Poppins',
       fontStyle: FontStyle.italic,
-      color: context.colors.inverseSurface.opaque(0.90),
-      overflow: TextOverflow.ellipsis,
+      color: theme.colorScheme.inverseSurface.withOpacity(0.90),
+    );
+    final linkStyle = TextStyle(
+      fontSize: 11,
+      fontFamily: 'Poppins',
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.primary,
+    );
+
+    String displayText = widget.description;
+    bool showToggle = false;
+
+    if (widget.description.length > 110) {
+      showToggle = true;
+      if (!isExpanded) {
+        displayText = '${widget.description.substring(0, 110).trim()}... ';
+      } else {
+        displayText = '${widget.description} ';
+      }
+    }
+
+    return GestureDetector(
+      onTap: showToggle ? () => setState(() => isExpanded = !isExpanded) : null,
+      child: RichText(
+        text: TextSpan(
+          style: textStyle,
+          children: [
+            TextSpan(text: displayText),
+            if (showToggle)
+              TextSpan(
+                text: isExpanded ? "Show less" : "Show more",
+                style: linkStyle,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

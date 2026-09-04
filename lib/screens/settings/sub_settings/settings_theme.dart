@@ -17,7 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 import 'package:anymex/screens/other_features.dart';
 
@@ -214,6 +214,17 @@ class _SettingsThemeState extends State<SettingsTheme> {
                           ),
                           const SizedBox(height: 10),
                           Obx(() {
+                            return CustomSwitchTile(
+                              switchValue: settings.usePosterColor,
+                              icon: HugeIcons.strokeRoundedImageDownload,
+                              title: "Use Poster Color",
+                              description:
+                                  "Applies anime/manga poster color as theme on details page",
+                              onChanged: (e) => settings.usePosterColor = e,
+                            );
+                          }),
+                          const SizedBox(height: 10),
+                          Obx(() {
                             return Column(
                               children: [
                                 CustomSwitchTile(
@@ -253,18 +264,6 @@ class _SettingsThemeState extends State<SettingsTheme> {
                                                 "Enable this if you want to retain the original color of your wallpaper",
                                             onChanged: (e) => settings
                                                 .retainOriginalColor = e,
-                                          ),
-                                          const SizedBox(height: 10),
-                                          CustomSwitchTile(
-                                            switchValue:
-                                                settings.usePosterColor,
-                                            icon: HugeIcons
-                                                .strokeRoundedImageDownload,
-                                            title: "Use Poster Color",
-                                            description:
-                                                "Applies anime/manga poster color on details page",
-                                            onChanged: (e) =>
-                                                settings.usePosterColor = e,
                                           ),
                                           const SizedBox(height: 10),
                                           CustomTile(
@@ -702,7 +701,7 @@ class _SettingsThemeState extends State<SettingsTheme> {
                               width: 30,
                               height: 30,
                               child: Icon(
-                                IconlyBold.tick_square,
+                                IconlyBold.tickSquare,
                                 size: 18,
                                 color: Theme.of(context)
                                     .colorScheme
@@ -918,7 +917,7 @@ class _SettingsThemeState extends State<SettingsTheme> {
                             width: 30,
                             height: 30,
                             child: Icon(
-                              IconlyBold.tick_square,
+                              IconlyBold.tickSquare,
                               size: 18,
                               color: Theme.of(context)
                                   .colorScheme

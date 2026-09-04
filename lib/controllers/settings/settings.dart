@@ -32,6 +32,7 @@ class Settings extends GetxController {
 
   RxBool enableBetaUpdates = false.obs;
   RxBool writeLogToFile = false.obs;
+  RxBool useHighRefreshRate = true.obs;
   RxString customLogDirectory = ''.obs;
 
   RxString downloadPath = ''.obs;
@@ -84,13 +85,15 @@ class Settings extends GetxController {
 
     enableBetaUpdates.value = General.enableBetaUpdates.get<bool>(false);
     writeLogToFile.value = General.writeLogToFile.get<bool>(false);
+    useHighRefreshRate.value = General.useHighRefreshRate.get<bool>(true);
     customLogDirectory.value = General.customLogDirectory.get<String>("");
-    
+
     downloadPath.value = DownloadKeys.downloadPath.get<String>("");
     concurrentDownloads.value = DownloadKeys.concurrentDownloads.get<int>(3);
     downloadChunks.value = DownloadKeys.downloadChunks.get<int>(1);
     hlsParallelSegments.value = DownloadKeys.hlsParallelSegments.get<int>(3);
-    enableJxlCompression.value = DownloadKeys.enableJxlCompression.get<bool>(false);
+    enableJxlCompression.value =
+        DownloadKeys.enableJxlCompression.get<bool>(false);
 
     bridgeMode.value = PluginKeys.bridgeMode.get<String>(_defaultBridgeMode);
     if (Platform.isMacOS && bridgeMode.value != 'sidecar') {
@@ -108,16 +111,26 @@ class Settings extends GetxController {
     PlayerShaders.getMpvPath().then((e) {
       mpvPath.value = e;
     });
-    setHighRefreshRate();
+    applyDisplayRefreshMode();
   }
 
-  Future<void> setHighRefreshRate() async {
+  Future<void> applyDisplayRefreshMode() async {
     if (!Platform.isAndroid) return;
     try {
-      await FlutterDisplayMode.setHighRefreshRate();
+      if (useHighRefreshRate.value) {
+        await FlutterDisplayMode.setHighRefreshRate();
+      } else {
+        await FlutterDisplayMode.setPreferredMode(DisplayMode.auto);
+      }
     } catch (e) {
-      Logger.e("Error setting high refresh rate: $e");
+      Logger.e("Error setting display refresh mode: $e");
     }
+  }
+
+  Future<void> saveHighRefreshRateToggle(bool value) async {
+    useHighRefreshRate.value = value;
+    General.useHighRefreshRate.set(value);
+    await applyDisplayRefreshMode();
   }
 
   Future<void> _fetchInviteLinks() async {
@@ -138,11 +151,12 @@ class Settings extends GetxController {
     }
   }
 
-  void checkForUpdates(BuildContext context) {
+  void checkForUpdates(BuildContext context, {bool isManual = false}) {
     UpdateManager().checkForUpdates(
       context,
       RxBool(true),
       isBeta: enableBetaUpdates.value,
+      isManual: isManual,
     );
   }
 
@@ -502,12 +516,6 @@ class Settings extends GetxController {
     PlayerSettingsKeys.autoSkipFiller.set(value);
   }
 
-  bool get enableScreenshot => _getPlayerSetting((s) => s.enableScreenshot);
-  set enableScreenshot(bool value) {
-    playerSettings.update((s) => s?.enableScreenshot = value);
-    PlayerSettingsKeys.enableScreenshot.set(value);
-  }
-
   bool get playerMenuAnimation =>
       _getPlayerSetting((s) => s.playerMenuAnimation);
   set playerMenuAnimation(bool value) {
@@ -518,13 +526,29 @@ class Settings extends GetxController {
   String get hardwareDecoder => _getPlayerSetting((s) => s.hardwareDecoder);
   set hardwareDecoder(String value) {
     final normalized = switch (value) {
-      'hw+' => Platform.isAndroid ? 'hw+' : 'hw',
+      'hw+' => 'hw+',
       'hw' => 'hw',
       'sw' => 'sw',
-      _ => Platform.isAndroid ? 'hw+' : 'hw',
+      _ => 'hw',
     };
     playerSettings.update((s) => s?.hardwareDecoder = normalized);
     PlayerSettingsKeys.hardwareDecoder.set(normalized);
+    if (Get.isRegistered<PlayerController>()) {
+      unawaited(Get.find<PlayerController>().reloadActivePlayer());
+    }
+  }
+
+  String get videoOutput => _getPlayerSetting((s) => s.videoOutput);
+  set videoOutput(String value) {
+    final normalized = switch (value) {
+      'gpu' => 'gpu',
+      'gpu-next' => 'gpu-next',
+      'mediacodec_embed' => 'mediacodec_embed',
+      'auto' => 'auto',
+      _ => 'auto',
+    };
+    playerSettings.update((s) => s?.videoOutput = normalized);
+    PlayerSettingsKeys.videoOutput.set(normalized);
     if (Get.isRegistered<PlayerController>()) {
       unawaited(Get.find<PlayerController>().reloadActivePlayer());
     }
@@ -535,6 +559,20 @@ class Settings extends GetxController {
   set enableSwipeControls(bool value) {
     playerSettings.update((s) => s?.enableSwipeControls = value);
     PlayerSettingsKeys.enableSwipeControls.set(value);
+  }
+
+  bool get enableGestureSafeZones =>
+      _getPlayerSetting((s) => s.enableGestureSafeZones);
+  set enableGestureSafeZones(bool value) {
+    playerSettings.update((s) => s?.enableGestureSafeZones = value);
+    PlayerSettingsKeys.enableGestureSafeZones.set(value);
+  }
+
+  double get gestureSafeZoneMargin =>
+      _getPlayerSetting((s) => s.gestureSafeZoneMargin);
+  set gestureSafeZoneMargin(double value) {
+    playerSettings.update((s) => s?.gestureSafeZoneMargin = value);
+    PlayerSettingsKeys.gestureSafeZoneMargin.set(value);
   }
 
   int get markAsCompleted => _getPlayerSetting((s) => s.markAsCompleted);

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:anymex/controllers/discord/discord_rpc.dart';
 import 'package:anymex/controllers/offline/offline_storage_controller.dart';
@@ -22,6 +23,8 @@ import 'package:anymex/screens/anime/widgets/custom_list_dialog.dart';
 import 'package:anymex/screens/anime/widgets/episode_section.dart';
 import 'package:anymex/screens/anime/widgets/list_editor.dart';
 import 'package:anymex/screens/anime/widgets/voice_actor.dart';
+import 'package:anymex/widgets/common/marquee_text.dart';
+import 'package:anymex/utils/color_extractor.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex/utils/logger.dart';
 import 'package:anymex/utils/media_share.dart';
@@ -32,10 +35,13 @@ import 'package:anymex/widgets/anime/gradient_image.dart';
 import 'package:anymex/widgets/common/glow.dart';
 import 'package:anymex/widgets/common/navbar.dart';
 import 'package:anymex/widgets/common/reusable_carousel.dart';
+import 'package:anymex/widgets/common/skeleton_loader.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_button.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_progress.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
 import 'package:anymex/widgets/custom_widgets/custom_textspan.dart';
+import 'package:anymex/widgets/custom_widgets/anymex_image.dart';
+import 'package:anymex/screens/anime/widgets/wrongtitle_modal.dart';
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:anymex/widgets/non_widgets/snackbar.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart';
@@ -44,7 +50,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:anymex/controllers/services/community_service.dart';
 import 'package:anymex/widgets/non_widgets/recommend_button.dart';
@@ -108,7 +114,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
   void _onPageSelected(int index) {
     selectedPage.value = index;
     controller.animateToPage(index,
-        duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
+        duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
   }
 
   Future<void> _showShareOptions() async {
@@ -149,18 +155,46 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
   @override
   void initState() {
     super.initState();
-    final initialPage = widget.initialTabIndex.clamp(0, 2).toInt();
+    posterColor = widget.media.color;
+    if (posterColor.isEmpty && widget.media.poster.isNotEmpty) {
+      _extractPosterColor();
+    }
+    final savedData = Get.find<OfflineStorageController>().getAnimeById(widget.media.id);
+    final hasWatchHistory = savedData?.currentEpisode != null;
+    
+    int initialPage = widget.initialTabIndex.clamp(0, 2).toInt();
+    if (widget.initialTabIndex == 0 && hasWatchHistory) {
+      initialPage = 1;
+    }
+    
     selectedPage.value = initialPage;
     controller = PageController(initialPage: initialPage);
     _updateAnifyAvailabilityForSource();
     _activeSourceWorker = ever<Source?>(sourceController.activeSource, (_) {
       _updateAnifyAvailabilityForSource();
+      if (anilistData != null) {
+        _mapToService();
+      }
     });
     Future.delayed(const Duration(milliseconds: 500), () {
       _checkAnimePresence();
     });
 
     _fetchAnilistData();
+  }
+
+  Future<void> _extractPosterColor() async {
+    final posterUrl = widget.media.poster;
+    if (posterUrl.isEmpty) return;
+    try {
+      final color = await ImageColorExtractor.extractColor(posterUrl);
+      if (color != null && mounted && posterColor.isEmpty) {
+        setState(() {
+          posterColor =
+              '#${color.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _syncMediaIds() async {
@@ -259,12 +293,13 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
 
   Future<void> _fetchAnilistData() async {
     try {
-      Logger.i("Fetch Initiated for Media => ${widget.media.id}");
+      print(
+          "Fetch Initiated for Media => ${widget.media.id} with type -> ${widget.media.mediaType}");
 
       final service = widget.media.serviceType.service;
 
-      final tempData = await service
-          .fetchDetails(FetchDetailsParams(id: widget.media.id.toString()));
+      final tempData = await service.fetchDetails(FetchDetailsParams(
+          id: widget.media.id.toString(), type: ItemType.anime));
 
       final isExtensions = widget.media.serviceType == ServicesType.extensions;
 
@@ -274,11 +309,19 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
             ..title = widget.media.title
             ..poster = widget.media.poster
             ..id = widget.media.id;
+          if (tempData.color.isNotEmpty && posterColor.isEmpty) {
+            posterColor = tempData.color;
+          }
         } else {
           anilistData = tempData;
-          posterColor = tempData.color;
+          if (tempData.color.isNotEmpty) {
+            posterColor = tempData.color;
+          }
         }
       });
+      if (posterColor.isEmpty) {
+        _extractPosterColor();
+      }
       DiscordRPCController.instance
           .updateMediaPresence(media: anilistData ?? widget.media);
       CommentPreloader.to.preloadComments(anilistData!);
@@ -328,7 +371,13 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
           sourceController.getSavedSource(titleId, ItemType.anime);
       if (savedSource != null) {
         sourceController.setActiveSource(savedSource, mediaId: titleId);
+        return;
       }
+    }
+    // New anime opened OR saved source is missing — select first available source by settings priority
+    final fallback = sourceController.getInstalledExtensions(ItemType.anime).firstOrNull;
+    if (fallback != null) {
+      sourceController.setActiveSource(fallback, mediaId: titleId);
     }
   }
 
@@ -337,20 +386,31 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
     episodeList.clear();
     rawEpisodes.clear();
     episodeError.value = false;
-    final key =
-        '${sourceController.activeSource.value?.id}-${anilistData?.id}-${anilistData?.serviceType.index}';
-    final savedTitle = DynamicKeys.mappedMediaTitle.get<String?>(key, null);
-    final mappedData = await SourceMapper.mapMedia(
-        formatTitles(anilistData ?? widget.media) ?? [], searchedTitle,
-        mediaId: widget.media.id.toString(),
-        type: ItemType.anime,
-        savedTitle: savedTitle,
-        synonyms: anilistData?.synonyms ?? []);
-    if (_isStaleSourceRequest(activeRequestId) || !mounted) {
-      return;
-    }
-    if (mappedData != null && mappedData.id.toString().isNotEmpty) {
-      await _fetchSourceDetails(mappedData, requestId: activeRequestId);
+    try {
+      final key =
+          '${sourceController.activeSource.value?.id}-${anilistData?.id}-${anilistData?.serviceType.index}';
+      final savedTitle = DynamicKeys.mappedMediaTitle.get<String?>(key, null);
+      final mappedData = await SourceMapper.mapMedia(
+          formatTitles(anilistData ?? widget.media) ?? [], searchedTitle,
+          mediaId: widget.media.id.toString(),
+          type: ItemType.anime,
+          savedTitle: savedTitle,
+          synonyms: anilistData?.synonyms ?? []);
+      if (_isStaleSourceRequest(activeRequestId) || !mounted) {
+        return;
+      }
+      if (mappedData != null && mappedData.id.toString().isNotEmpty) {
+        await _fetchSourceDetails(mappedData, requestId: activeRequestId);
+      } else {
+        if (!_isStaleSourceRequest(activeRequestId) && mounted) {
+          episodeError.value = true;
+        }
+      }
+    } catch (e, s) {
+      Logger.e("Error during _mapToService: $e\n$s");
+      if (!_isStaleSourceRequest(activeRequestId) && mounted) {
+        episodeError.value = true;
+      }
     }
   }
 
@@ -391,7 +451,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
     final convertedEpisodes = _convertEpisodes(episodes, tempData.title);
     rawEpisodes.assignAll(_cloneEpisodes(convertedEpisodes));
     episodeList.assignAll(_renewEpisodeData(_cloneEpisodes(convertedEpisodes)));
-    searchedTitle.value = "Found: ${tempData.title}";
+    searchedTitle.value = tempData.title;
     setState(() {});
   }
 
@@ -402,7 +462,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
       episodeList.clear();
       rawEpisodes.clear();
       final episodeFuture = await sourceController.activeSource.value!.methods
-          .getDetail(DMedia.withUrl(media.id));    
+          .getDetail(DMedia.withUrl(media.id));
       if (_isStaleSourceRequest(activeRequestId) || !mounted) {
         return;
       }
@@ -414,7 +474,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
 
       rawEpisodes.assignAll(_cloneEpisodes(episodes));
       episodeList.assignAll(_renewEpisodeData(_cloneEpisodes(episodes)));
-      searchedTitle.value = "Found: ${media.title}";
+      searchedTitle.value = media.title;
       _applyFillerInfo();
       if (mounted) {
         setState(() {});
@@ -452,6 +512,12 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
     _applyFillerInfo();
     if (mounted) {
       setState(() {});
+    }
+    if (Get.isRegistered<OfflineStorageController>()) {
+      Get.find<OfflineStorageController>().updateAnimeEpisodesOnly(
+        widget.media.id.toString(),
+        newEps,
+      );
     }
   }
 
@@ -603,6 +669,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
                   data: anilistData,
                   tag: widget.tag,
                   posterUrl: widget.media.poster,
+                  topCenterWidget: _buildSourceChip(),
                 ),
                 if (anilistData != null) ...[
                   Padding(
@@ -707,10 +774,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
                     ),
                   ),
                 ] else ...[
-                  const SizedBox(
-                    height: 400,
-                    child: Center(child: AnymexProgressIndicator()),
-                  )
+                  _buildSkeletonLoader(context),
                 ],
               ],
             ),
@@ -744,6 +808,49 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
   Widget _buildEpisodePageBody(BuildContext context) {
     return CustomScrollView(
       slivers: [
+        if (anilistData?.nextAiringEpisode != null)
+          SliverToBoxAdapter(
+            child: Obx(() {
+              final t = timeLeft.value;
+              if (t <= 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        context.colors.primaryContainer.opaque(0.3),
+                        context.colors.primary.opaque(0.12),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: context.colors.primary.opaque(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.access_time_rounded,
+                          size: 14, color: context.colors.primary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Ep ${anilistData!.nextAiringEpisode!.episode} in ${formatTime(t)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.colors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
         EpisodeSection(
           searchedTitle: searchedTitle,
           anilistData: anilistData ?? widget.media,
@@ -1006,7 +1113,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
                     Get.back();
                   },
                   selectedIcon: Iconsax.back_square,
-                  unselectedIcon: IconlyBold.arrow_left,
+                  unselectedIcon: IconlyBold.arrowLeft,
                 ),
               ),
               const SizedBox(height: 10),
@@ -1041,7 +1148,7 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
     return Obx(() => ResponsiveNavBar(
             isDesktop: false,
             currentIndex: selectedPage.value,
-            margin: const EdgeInsets.symmetric(horizontal: 80, vertical: 40),
+            margin: const EdgeInsets.symmetric(horizontal: 60, vertical: 30),
             items: [
               NavItem(
                   onTap: _onPageSelected,
@@ -1059,6 +1166,166 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
                   unselectedIcon: HugeIcons.strokeRoundedComment02,
                   label: "Comments"),
             ]));
+  }
+
+  Widget _buildSourceChip() {
+    if (!sourceController.shouldShowExtensions.value) return const SizedBox.shrink();
+    return Obx(() {
+      final activeSource = sourceController.activeSource.value;
+      
+      return SizedBox(
+        height: 48,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Flexible(
+              flex: 0,
+              child: GestureDetector(
+                onTap: () {
+                  _showSourceSelectionModal();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      activeSource != null 
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Builder(builder: (context) {
+                              final iconUrl = activeSource.iconUrl ?? '';
+                              if (iconUrl.isEmpty) {
+                                return Icon(Icons.extension_rounded, size: 16, color: Theme.of(context).colorScheme.primary);
+                              }
+                              if (iconUrl.startsWith('http')) {
+                                return AnymeXImage(
+                                  imageUrl: iconUrl,
+                                  height: 16,
+                                  width: 16,
+                                );
+                              }
+                              return Image.file(
+                                File(iconUrl),
+                                height: 16,
+                                width: 16,
+                                fit: BoxFit.cover,
+                              );
+                            }),
+                          )
+                        : Icon(Icons.extension_rounded, size: 16, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          activeSource?.name?.toUpperCase() ?? 'SELECT SOURCE', 
+                          style: TextStyle(
+                            fontSize: 12, 
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (activeSource != null && searchedTitle.value.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 1,
+                child: GestureDetector(
+                  onTap: () {
+                    showWrongTitleModal(
+                      context,
+                      widget.media.title,
+                      (manga) async {
+                        final key = '${sourceController.activeSource.value?.id}-${widget.media.id}-${widget.media.serviceType.index}';
+                        DynamicKeys.mappedMediaTitle.set(key, manga.title);
+                        await _fetchSourceDetails(Media.froDMedia(manga, ItemType.anime));
+                      },
+                      mediaId: widget.media.id.toString(),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Builder(
+                      builder: (context) {
+                        final style = TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: searchedTitle.value.contains('No Match Found')
+                              ? Theme.of(context).colorScheme.error
+                              : Theme.of(context).colorScheme.onSurface,
+                        );
+                        final textPainter = TextPainter(
+                          text: TextSpan(text: searchedTitle.value, style: style),
+                          maxLines: 1,
+                          textDirection: Directionality.of(context),
+                        )..layout();
+                        
+                        return SizedBox(
+                          width: textPainter.width,
+                          child: MarqueeText(
+                            searchedTitle.value,
+                            style: style,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ]
+          ],
+        ),
+      );
+    });
+  }
+
+  void _showSourceSelectionModal() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text("Select Source", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                const SizedBox(height: 20),
+                ...sourceController.installedExtensions.map((ext) {
+                  return ListTile(
+                    leading: CircleAvatar(backgroundImage: NetworkImage(ext.managerIcon)),
+                    title: Text(ext.name ?? 'Unknown'),
+                    subtitle: Text(ext.lang ?? 'Unknown'),
+                    onTap: () {
+                      sourceController.getExtensionByValue(ext.id.toString(), mediaId: anilistData?.id?.toString() ?? widget.media.id.toString());
+                      Get.back();
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void showListEditorModal(BuildContext context) {
@@ -1108,5 +1375,9 @@ class _AnimeDetailsPageState extends State<AnimeDetailsPage> {
         );
       },
     );
+  }
+
+  Widget _buildSkeletonLoader(BuildContext context) {
+    return const AnimeDetailsSkeleton();
   }
 }

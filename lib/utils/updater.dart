@@ -18,11 +18,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UpdateManager {
+  /// Check updates from our custom fork repository
+  static const bool disableOfficialUpdates = false;
+
   static const String _stableRepoUrl =
-      'https://api.github.com/repos/RyanYuuki/AnymeX/releases/latest';
+      'https://api.github.com/repos/DeepBlue9789/AnymeX/releases/latest';
 
   static const String _betaRepoUrl =
-      'https://api.github.com/repos/Shebyyy/AnymeX-Preview/releases/latest';
+      'https://api.github.com/repos/DeepBlue9789/AnymeX/releases/latest';
 
   String getDownloadUrlByArch(List<dynamic> assets, String arch) {
     for (var asset in assets) {
@@ -37,7 +40,17 @@ class UpdateManager {
     BuildContext context,
     RxBool canShowUpdate, {
     bool isBeta = false,
+    bool isManual = false,
   }) async {
+    if (disableOfficialUpdates) {
+      if (isManual) {
+        snackBar("Official update checking is disabled on this custom fork.");
+      } else {
+        debugPrint("Skipping official update check on custom fork.");
+      }
+      return;
+    }
+
     if (canShowUpdate.value) {
       canShowUpdate.value = false;
 
@@ -61,7 +74,8 @@ class UpdateManager {
           'linux': getDownloadUrlByArch(assets, '.AppImage'),
         };
 
-        if (_shouldUpdate(currentVersion, latestRelease['tag_name'])) {
+        if (_shouldUpdate(currentVersion, latestRelease['tag_name'],
+            isBeta: isBeta)) {
           _showUpdateBottomSheet(
             context,
             currentVersion,
@@ -83,15 +97,18 @@ class UpdateManager {
 
   final bool _currentVersionIncludesHotfix = true;
 
-  bool _shouldUpdate(String currentVersion, String latestVersion) {
+  bool _shouldUpdate(String currentVersion, String latestVersion,
+      {bool isBeta = false}) {
     currentVersion = currentVersion.replaceFirst(RegExp(r'^v'), '');
     latestVersion = latestVersion.replaceFirst(RegExp(r'^v'), '');
 
     final currentSplit = currentVersion.split('-');
     final latestSplit = latestVersion.split('-');
 
-    final currentNums = currentSplit[0].split('.').map(int.parse).toList();
-    final latestNums = latestSplit[0].split('.').map(int.parse).toList();
+    final currentNums =
+        currentSplit[0].split('+')[0].split('.').map(int.parse).toList();
+    final latestNums =
+        latestSplit[0].split('+')[0].split('.').map(int.parse).toList();
 
     for (int i = 0; i < 3; i++) {
       final c = i < currentNums.length ? currentNums[i] : 0;
@@ -111,7 +128,12 @@ class UpdateManager {
       return true;
     }
 
-    if (!currentHasTag && latestHasTag) return false;
+    if (!currentHasTag && latestHasTag) {
+      if (isBeta) {
+        return true;
+      }
+      return false;
+    }
 
     if (currentHasTag && !latestHasTag) return true;
 

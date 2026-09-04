@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:math' show min;
+import 'dart:math';
+import 'package:collection/collection.dart';
 
 import 'package:anymex/controllers/cacher/cache_controller.dart';
 import 'package:anymex/controllers/service_handler/params.dart';
@@ -10,7 +11,6 @@ import 'package:anymex/controllers/services/anilist/kitsu.dart';
 import 'package:anymex/controllers/services/widgets/widgets_builders.dart';
 import 'package:anymex/screens/community/community_recommendations_page.dart';
 import 'package:anymex/controllers/services/community_service.dart';
-import 'package:anymex/controllers/settings/methods.dart';
 import 'package:anymex/controllers/settings/settings.dart';
 import 'package:anymex/controllers/source/source_controller.dart';
 import 'package:anymex/database/data_keys/keys.dart';
@@ -22,12 +22,6 @@ import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/models/Media/staff.dart';
 import 'package:anymex/models/Service/base_service.dart';
 import 'package:anymex/models/Service/online_service.dart';
-import 'package:anymex/screens/anime/details_page.dart';
-import 'package:anymex/screens/home_page.dart';
-import 'package:anymex/screens/library/online/anime_list.dart';
-import 'package:anymex/screens/library/online/manga_list.dart';
-import 'package:anymex/screens/manga/details_page.dart';
-import 'package:anymex/screens/other_features.dart';
 import 'package:anymex/utils/fallback/fallback_anime.dart' as fb;
 import 'package:anymex/utils/fallback/fallback_manga.dart' as fbm;
 import 'package:anymex/utils/function.dart';
@@ -69,37 +63,6 @@ class AnilistData extends GetxController implements BaseService, OnlineService {
   // Novel Data
   RxList<DMedia> novelData = <DMedia>[].obs;
 
-  Media? _firstMediaWithCover(Iterable<Media> mediaList) {
-    for (final media in mediaList) {
-      final cover = media.cover;
-      if (cover != null && cover.isNotEmpty) {
-        return media;
-      }
-    }
-    return null;
-  }
-
-  Media? _lastMediaWithCover(Iterable<Media> mediaList) {
-    final list = mediaList.toList(growable: false);
-    for (var index = list.length - 1; index >= 0; index--) {
-      final media = list[index];
-      final cover = media.cover;
-      if (cover != null && cover.isNotEmpty) {
-        return media;
-      }
-    }
-    return null;
-  }
-
-  void _openHomeButtonMedia(Media media) {
-    final tag = 'home-button-${media.serviceType.name}-${media.id}';
-    if (media.mediaType == ItemType.manga) {
-      navigate(() => MangaDetailsPage(media: media, tag: tag));
-      return;
-    }
-    navigate(() => AnimeDetailsPage(media: media, tag: tag));
-  }
-
   @override
   RxList<Widget> homeWidgets(BuildContext context) {
     final settings = Get.find<Settings>();
@@ -117,99 +80,24 @@ class AnilistData extends GetxController implements BaseService, OnlineService {
     ];
     return [
       if (anilistAuth.isLoggedIn.value) ...[
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final isDesktop = constraints.maxWidth > 600;
-            final buttonHeight = !isDesktop ? 70.0 : 90.0;
-            final animeButtonMedia = _firstMediaWithCover(trendingAnimes);
-            final mangaButtonMedia = _firstMediaWithCover(trendingMangas);
-            final otherButtonMedia = _lastMediaWithCover([
-              ...popularAnimes,
-              ...popularMangas,
-              ...trendingMangas,
-              ...trendingAnimes,
-            ]);
-
-            final double itemWidth = isDesktop ? 300.0 : constraints.maxWidth;
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 20,
-                runSpacing: 10,
-                children: [
-                  SizedBox(
-                    width: itemWidth * 2 + 15,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: ImageButton(
-                            height: buttonHeight,
-                            buttonText: "ANIME LIST",
-                            backgroundImage: animeButtonMedia?.cover ?? '',
-                            borderRadius: 16.multiplyRadius(),
-                            onPressed: () => navigate(() => const AnimeList()),
-                            onLongPress: animeButtonMedia == null
-                                ? null
-                                : () => _openHomeButtonMedia(animeButtonMedia),
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: ImageButton(
-                            height: buttonHeight,
-                            buttonText: "MANGA LIST",
-                            backgroundImage: mangaButtonMedia?.cover ?? '',
-                            borderRadius: 16.multiplyRadius(),
-                            onPressed: () =>
-                                navigate(() => const AnilistMangaList()),
-                            onLongPress: mangaButtonMedia == null
-                                ? null
-                                : () => _openHomeButtonMedia(mangaButtonMedia),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: constraints.maxWidth > (itemWidth * 3)
-                        ? itemWidth
-                        : itemWidth * 2 + 15,
-                    child: ImageButton(
-                      height: buttonHeight,
-                      buttonText: "OTHER",
-                      borderRadius: 16.multiplyRadius(),
-                      backgroundImage: otherButtonMedia?.cover ?? '',
-                      onPressed: () =>
-                          navigate(() => const OtherFeaturesPage()),
-                      onLongPress: otherButtonMedia == null
-                          ? null
-                          : () => _openHomeButtonMedia(otherButtonMedia),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
         Obx(() {
           anilistAuth.isLoggedIn.value;
           if (acceptedLists.isEmpty) return const SizedBox.shrink();
           return Column(
             children: acceptedLists.map((e) {
+              final isManga = e.contains("Manga") || e.contains("Reading");
+              final listData = isManga
+                  ? anilistAuth.mangaList.removeDupes()
+                  : anilistAuth.animeList.removeDupes();
+              final filteredData = filterListByLabel(listData, e);
+              final isWatchingLoading = anilistAuth.isWatchingListLoading.value ||
+                  (listData.isEmpty && anilistAuth.isLoggedIn.value);
               return ReusableCarousel(
-                data: filterListByLabel(
-                    e.contains("Manga") || e.contains("Reading")
-                        ? anilistAuth.mangaList.removeDupes()
-                        : anilistAuth.animeList.removeDupes(),
-                    e),
+                data: filteredData,
                 title: e,
                 variant: DataVariant.anilist,
-                type: e.contains("Manga") || e.contains("Reading")
-                    ? ItemType.manga
-                    : ItemType.anime,
+                type: isManga ? ItemType.manga : ItemType.anime,
+                isLoading: isWatchingLoading && listData.isEmpty,
               );
             }).toList(),
           );
@@ -256,7 +144,7 @@ class AnilistData extends GetxController implements BaseService, OnlineService {
           return const SizedBox.shrink();
         }
         return buildUnderratedSection('Community Recommendations', filteredList,
-            onSeeAll: () => navigate(() => CommunityRecommendationsPage(
+            onSeeAll: () => navigate(() => const CommunityRecommendationsPage(
                   category: 'anime',
                   type: ItemType.anime,
                 )));
@@ -277,7 +165,6 @@ class AnilistData extends GetxController implements BaseService, OnlineService {
       // buildMangaSection('Top Rated Mangas', topRatedMangas),
       // buildMangaSection('Top Ongoing Mangas', topOngoingMangas),
       ...sourceController.novelSections,
-      // Underrated Manga section at the bottom (filtered for logged-in users)
       Obx(() {
         final filteredList = communityService.getFilteredCommunityMangas();
         if (filteredList.isEmpty) {
@@ -285,7 +172,7 @@ class AnilistData extends GetxController implements BaseService, OnlineService {
         }
         return buildUnderratedMangaSection(
             'Community Recommendations', filteredList,
-            onSeeAll: () => navigate(() => CommunityRecommendationsPage(
+            onSeeAll: () => navigate(() => const CommunityRecommendationsPage(
                   category: 'manga',
                   type: ItemType.manga,
                 )));
@@ -646,6 +533,7 @@ averageScore
       trendingMangas.value =
           parseMediaList(responseData['trendingManga']['media']);
     } else {
+      Logger.e('Failed to load AniList manga data (${response.statusCode}): ${response.body}');
       throw Exception(
           'Failed to load AniList manga data: ${response.statusCode}');
     }
@@ -827,15 +715,39 @@ averageScore
         return episodeList;
       }
 
-      for (int i = 0; i < min(episodeList.length, episodesData.length); i++) {
-        final episodeData = episodesData.entries.toList()[i];
-        episodeList[i]
-          ..title = episodeData.value?['title']['en']?.toString() ??
-              episodeList[i].title
-          ..thumbnail = episodeData.value?['image']?.toString() ??
-              episodeList[i].thumbnail
-          ..desc =
-              episodeData.value?['overview']?.toString() ?? episodeList[i].desc;
+      final entriesList = episodesData.entries.toList();
+      for (int i = 0; i < episodeList.length; i++) {
+        final ep = episodeList[i];
+        final epNum = ep.number;
+        final epData = episodesData[epNum] ??
+            episodesData.values.firstWhereOrNull((v) =>
+                v is Map<String, dynamic> &&
+                (v['episodeNumber']?.toString() == epNum ||
+                    (double.tryParse(v['episodeNumber']?.toString() ?? '') != null &&
+                        double.tryParse(v['episodeNumber']?.toString() ?? '') == double.tryParse(epNum)))) ??
+            (i < entriesList.length ? entriesList[i].value : null);
+
+        if (epData is Map<String, dynamic>) {
+          final enTitle = epData['title']?['en']?.toString();
+          final jaTitle = epData['title']?['ja']?.toString();
+          final image = epData['image']?.toString();
+          final overview = epData['overview']?.toString();
+
+          if (enTitle != null && enTitle.isNotEmpty) {
+            ep.title = enTitle;
+          } else if (jaTitle != null &&
+              jaTitle.isNotEmpty &&
+              (ep.title == null || ep.title!.isEmpty || ep.title == 'Episode $epNum')) {
+            ep.title = jaTitle;
+          }
+
+          if (image != null && image.isNotEmpty) {
+            ep.thumbnail = image;
+          }
+          if (overview != null && overview.isNotEmpty) {
+            ep.desc = overview;
+          }
+        }
       }
 
       return episodeList;
@@ -1125,9 +1037,15 @@ averageScore
   @override
   Future<void> fetchHomePage() async {
     await Future.wait([
-      fetchAnilistHomepage(),
-      fetchAnilistMangaPage(),
-      communityService.fetchAll(),
+      fetchAnilistHomepage().catchError((e) {
+        Logger.e('fetchAnilistHomepage failed: $e');
+      }),
+      fetchAnilistMangaPage().catchError((e) {
+        Logger.e('fetchAnilistMangaPage failed: $e');
+      }),
+      communityService.fetchAll().catchError((e) {
+        Logger.e('communityService.fetchAll failed: $e');
+      }),
     ]);
   }
 

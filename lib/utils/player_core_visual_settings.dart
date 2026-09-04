@@ -10,10 +10,11 @@ class PlayerCoreVisualSettings {
     'videoSync': 'audio',
     'interpolation': false,
     'cacheMinutes': 5,
-    'demuxerReadaheadSeconds': 20,
+    'demuxerReadaheadSeconds': 30,
     'demuxerMaxBytesMb': 64,
     'vdLavcThreads': 0,
-    'audioPitchCorrection': true,
+    'audioPitchCorrection': false,
+    'networkTimeout': 30,
   };
 
   static const Map<String, dynamic> betterPlayerCoreDefaults = {
@@ -86,7 +87,7 @@ class PlayerCoreVisualSettings {
     await _safeSet(
         mpv, 'cache-secs', (settings['cacheSeconds'] as num?)?.toInt() ?? 30);
     await _safeSet(mpv, 'demuxer-readahead-secs',
-        (settings['demuxerReadaheadSeconds'] as num?)?.toInt() ?? 20);
+        (settings['demuxerReadaheadSeconds'] as num?)?.toInt() ?? 30);
     await _safeSet(
       mpv,
       'demuxer-max-bytes',
@@ -98,6 +99,11 @@ class PlayerCoreVisualSettings {
       mpv,
       'audio-pitch-correction',
       _boolToMpv(settings['audioPitchCorrection']),
+    );
+    await _safeSet(
+      mpv,
+      'network-timeout',
+      (settings['networkTimeout'] as num?)?.toInt() ?? 30,
     );
   }
 

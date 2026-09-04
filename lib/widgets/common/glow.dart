@@ -1,6 +1,5 @@
 // ignore_for_file: deprecated_member_use
 import 'dart:io';
-import 'dart:math';
 
 import 'package:anymex/controllers/settings/methods.dart';
 import 'package:anymex/controllers/settings/settings.dart';
@@ -39,32 +38,64 @@ class Glow extends StatelessWidget {
     this.disabled = false,
   });
 
+  static Color? parseColor(String colorStr) {
+    if (colorStr.isEmpty) return null;
+    try {
+      String clean = colorStr.replaceAll('#', '').trim();
+      if (clean.isEmpty) return null;
+      if (clean.length == 6) {
+        return Color(int.parse('0xFF$clean'));
+      } else if (clean.length == 8) {
+        return Color(int.parse('0x$clean'));
+      }
+      return Color(int.parse(clean));
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = Get.find<Settings>();
-    final theme = color.isNotEmpty && settings.usePosterColor
-        ? ColorScheme.fromSeed(
-            brightness: Theme.of(context).brightness,
-            seedColor: Color(
-              int.parse(color.replaceAll('#', '0xFF')),
-            ),
-          )
-        : context.colors;
     final isDesktop = Platform.isWindows;
     final isOled = Provider.of<ThemeProvider>(context).isOled;
-    final ch = isDesktop
-        ? Container(
-            margin: const EdgeInsets.only(top: 40),
-            child: child,
-          )
-        : child;
-
-    if (disabled || (isOled && isDesktop)) {
-      return Container(
-          color: isOled ? Colors.black : Colors.transparent, child: ch);
-    }
 
     return Obx(() {
+      final parsedSeedColor = parseColor(color);
+      final dynamicColorScheme =
+          (parsedSeedColor != null && settings.usePosterColor)
+              ? ColorScheme.fromSeed(
+                  brightness: Theme.of(context).brightness,
+                  seedColor: parsedSeedColor,
+                )
+              : null;
+
+      final theme = dynamicColorScheme ?? context.colors;
+
+      Widget content = child;
+      if (dynamicColorScheme != null) {
+        final baseTheme = Theme.of(context);
+        content = Theme(
+          data: baseTheme.copyWith(
+            colorScheme: dynamicColorScheme,
+            primaryColor: dynamicColorScheme.primary,
+          ),
+          child: content,
+        );
+      }
+
+      final ch = isDesktop
+          ? Container(
+              margin: const EdgeInsets.only(top: 40),
+              child: content,
+            )
+          : content;
+
+      if (disabled || (isOled && isDesktop)) {
+        return Container(
+            color: isOled ? Colors.black : Colors.transparent, child: ch);
+      }
+
       settings.liquidBackgroundPath;
       final liquidMode = settings.liquidMode;
 

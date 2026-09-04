@@ -135,13 +135,19 @@ class SourceMapper {
       final token = "map_${mappingToken}_${query.hashCode}";
       sourceController.updateToken(isManga ? 'manga_search' : 'search', token);
 
-      final results = (await activeSource.methods.search(
-        query,
-        1,
-        [],
-        parameters: SourceParams(cancelToken: token),
-      ))
-          .list;
+      List<DMedia> results = [];
+      try {
+        final res = await activeSource.methods.search(
+          query,
+          1,
+          [],
+          parameters: SourceParams(cancelToken: token),
+        );
+        results = res.list;
+      } catch (e) {
+        Logger.i("Error searching source for '$query': $e");
+        return;
+      }
 
       if (results.isEmpty || isInterrupted()) return;
 
@@ -199,7 +205,7 @@ class SourceMapper {
     if (savedTitle != null && savedTitle.isNotEmpty) {
       await search(savedTitle, savedTitle, false);
       if (bestScore >= 0.7 && bestMatch != null) {
-        searchedTitle.value = "Found: ${bestMatch.title ?? ''}";
+        searchedTitle.value = bestMatch.title ?? '';
         return Media.froDMedia(bestMatch, type);
       }
     }
@@ -208,7 +214,7 @@ class SourceMapper {
       await search(englishTitle, englishTitle, false);
       if (isInterrupted()) return null;
       if (bestScore >= 0.98) {
-        searchedTitle.value = "Found: ${bestMatch.title ?? ''}";
+        searchedTitle.value = bestMatch.title ?? '';
         return Media.froDMedia(bestMatch, type);
       }
     }
@@ -219,7 +225,7 @@ class SourceMapper {
       await search(romajiTitle, romajiTitle, false);
       if (isInterrupted()) return null;
       if (bestScore >= 0.98) {
-        searchedTitle.value = "Found: ${bestMatch.title ?? ''}";
+        searchedTitle.value = bestMatch.title ?? '';
         return Media.froDMedia(bestMatch, type);
       }
     }
@@ -235,7 +241,7 @@ class SourceMapper {
       }
       if (isInterrupted()) return null;
       if (bestScore >= 0.98) {
-        searchedTitle.value = "Found: ${bestMatch.title ?? ''}";
+        searchedTitle.value = bestMatch.title ?? '';
         return Media.froDMedia(bestMatch, type);
       }
     }
@@ -251,12 +257,12 @@ class SourceMapper {
     }
 
     if (bestScore >= 0.7 && bestMatch != null) {
-      searchedTitle.value = "Found: ${bestMatch.title ?? ''}";
+      searchedTitle.value = bestMatch.title ?? '';
       return Media.froDMedia(bestMatch, type);
     }
 
     searchedTitle.value = fallbackResults.isNotEmpty
-        ? "Found: ${fallbackResults.first.title ?? 'Unknown Title'}"
+        ? fallbackResults.first.title ?? 'Unknown Title'
         : "No Match Found";
 
     return fallbackResults.isNotEmpty

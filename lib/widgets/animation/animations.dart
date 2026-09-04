@@ -12,11 +12,11 @@ class PageAnimation extends StatefulWidget {
   const PageAnimation({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 800),
+    this.duration = const Duration(milliseconds: 300),
     this.delay = Duration.zero,
-    this.slideDistance = 50.0,
-    this.bounceHeight = 20.0,
-    this.curve = Curves.elasticOut,
+    this.slideDistance = 30.0,
+    this.bounceHeight = 10.0,
+    this.curve = Curves.easeOut,
   });
 
   @override
@@ -110,11 +110,11 @@ class BouncyAnimatedItemWrapper extends StatefulWidget {
   const BouncyAnimatedItemWrapper({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 800),
+    this.duration = const Duration(milliseconds: 300),
     this.delay = Duration.zero,
-    this.slideDistance = 50.0,
-    this.bounceHeight = 20.0,
-    this.curve = Curves.elasticOut,
+    this.slideDistance = 25.0,
+    this.bounceHeight = 10.0,
+    this.curve = Curves.easeOut,
   });
 
   @override
@@ -212,11 +212,11 @@ class StaggeredBouncyAnimatedWrapper extends StatelessWidget {
     super.key,
     required this.child,
     this.index = 0,
-    this.baseDuration = const Duration(milliseconds: 800),
-    this.staggerDelay = const Duration(milliseconds: 150),
-    this.slideDistance = 50.0,
-    this.bounceHeight = 20.0,
-    this.curve = Curves.elasticOut,
+    this.baseDuration = const Duration(milliseconds: 300),
+    this.staggerDelay = const Duration(milliseconds: 60),
+    this.slideDistance = 25.0,
+    this.bounceHeight = 10.0,
+    this.curve = Curves.easeOut,
   });
 
   @override
@@ -438,10 +438,10 @@ class AnimatedItemWrapper extends StatefulWidget {
   const AnimatedItemWrapper({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 600),
+    this.duration = const Duration(milliseconds: 200),
     this.delay = Duration.zero,
-    this.slideDistance = 30.0,
-    this.curve = Curves.easeOutCubic,
+    this.slideDistance = 15.0,
+    this.curve = Curves.easeOut,
   });
 
   @override
@@ -522,10 +522,10 @@ class StaggeredAnimatedItemWrapper extends StatelessWidget {
     super.key,
     required this.child,
     this.index = 0,
-    this.baseDuration = const Duration(milliseconds: 600),
-    this.staggerDelay = const Duration(milliseconds: 100),
-    this.slideDistance = 30.0,
-    this.curve = Curves.easeOutCubic,
+    this.baseDuration = const Duration(milliseconds: 200),
+    this.staggerDelay = const Duration(milliseconds: 40),
+    this.slideDistance = 15.0,
+    this.curve = Curves.easeOut,
   });
 
   @override
@@ -551,9 +551,9 @@ class VisibilityAnimatedWrapper extends StatefulWidget {
   const VisibilityAnimatedWrapper({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 600),
-    this.slideDistance = 30.0,
-    this.curve = Curves.easeOutCubic,
+    this.duration = const Duration(milliseconds: 200),
+    this.slideDistance = 15.0,
+    this.curve = Curves.easeOut,
     this.startAnimation = true,
   });
 

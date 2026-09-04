@@ -12,10 +12,10 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
 class CommentumService extends GetxController {
-  String get _baseUrl {
+  String? get _baseUrl {
     final envBase = (dotenv.env['COMMENTS_BASE_URL'] ?? '').trim();
     if (envBase.isEmpty) {
-      throw StateError('COMMENTS_BASE_URL is missing in .env');
+      return null;
     }
     return envBase.endsWith('/')
         ? envBase.substring(0, envBase.length - 1)
@@ -39,6 +39,8 @@ class CommentumService extends GetxController {
   Future<List<Comment>> fetchComments(String mediaId,
       {int page = 1, int limit = 50, String sort = 'newest'}) async {
     try {
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return [];
       final response = await http.get(
         Uri.parse(
             '$_baseUrl/media?media_id=$mediaId&client_type=$_clientType&page=$page&limit=$limit&sort=$sort'),
@@ -117,8 +119,11 @@ class CommentumService extends GetxController {
 
       Logger.i('Creating comment with body: ${json.encode(requestBody)}');
 
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return null;
+
       final response = await http.post(
-        Uri.parse('$_baseUrl/comments'),
+        Uri.parse('$baseUrl/comments'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -161,8 +166,10 @@ class CommentumService extends GetxController {
     }
 
     try {
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return null;
       final response = await http.post(
-        Uri.parse('$_baseUrl/comments'),
+        Uri.parse('$baseUrl/comments'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -230,8 +237,11 @@ class CommentumService extends GetxController {
         body['token'] = token;
       }
 
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return false;
+
       final response = await http.post(
-        Uri.parse('$_baseUrl/comments'),
+        Uri.parse('$baseUrl/comments'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -262,6 +272,8 @@ class CommentumService extends GetxController {
     }
 
     try {
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return null;
       final response = await http.post(
         Uri.parse('$_baseUrl/votes'),
         headers: {
@@ -308,6 +320,8 @@ class CommentumService extends GetxController {
     }
 
     try {
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return false;
       final response = await http.post(
         Uri.parse('$_baseUrl/reports'),
         headers: {
@@ -351,6 +365,8 @@ class CommentumService extends GetxController {
     }
 
     try {
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return [];
       final response = await http.post(
         Uri.parse('$_baseUrl/reports'),
         headers: {
@@ -396,6 +412,8 @@ class CommentumService extends GetxController {
     }
 
     try {
+      final baseUrl = _baseUrl;
+      if (baseUrl == null) return false;
       final response = await http.post(
         Uri.parse('$_baseUrl/moderation'),
         headers: {
@@ -520,13 +538,15 @@ class CommentumService extends GetxController {
 
   Future<String> getUserRole() async {
     if (currentUserId == null) return 'user';
+    final baseUrl = _baseUrl;
+    if (baseUrl == null) return 'user';
 
     try {
       final token = await _authToken;
       if (token == null) return 'user';
 
       final response = await http.post(
-        Uri.parse('$_baseUrl/users/role'),
+        Uri.parse('$baseUrl/users/role'),
         headers: {
           'Content-Type': 'application/json',
         },

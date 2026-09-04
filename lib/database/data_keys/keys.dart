@@ -24,6 +24,8 @@ enum General {
   filterRepeating,
   communityListViewIsGrid,
   hasJoinedNewDiscord,
+  discordRpcEnabled,
+  useHighRefreshRate,
 }
 
 enum ThemeKeys {
@@ -36,7 +38,7 @@ enum ThemeKeys {
   logoAnimationType,
 }
 
-enum PlayerKeys { useLibass, useMediaKit }
+enum PlayerKeys { useLibass, useMediaKit, autoRotateEnabled }
 
 enum PlayerUiKeys {
   playerExperimentalEnabled,
@@ -135,6 +137,13 @@ enum SyncKeys {
   gistGithubUsername,
   gistAutoDeleteCompleted,
   gistExitSyncNotifications,
+  syncProvider,
+  pocketbaseUrl,
+  pocketbaseEmail,
+  pocketbasePassword,
+  pocketbaseToken,
+  pocketbaseUserId,
+  pocketbaseAutoSyncHistory,
 }
 
 enum SourceKeys {
@@ -165,6 +174,9 @@ enum AuthKeys {
   malRefreshToken,
   simklAuthToken,
   malSessionId,
+  anilistCachedProfileJson,
+  anilistCachedUsername,
+  anilistCachedAvatar,
 }
 
 enum SearchKeys { novelSearchedQueries }
@@ -192,18 +204,20 @@ enum DynamicKeys {
   libraryGridSize,
   mappedMediaTitle,
   offlineVideoProgress,
-  stickySource;
+  stickySource,
+  preferredServer,
+  preferredSubtitle;
 
   T get<T>(dynamic id, [T? defaultValue]) {
     return KvHelper.get<T>('${name}_$id', defaultVal: defaultValue);
   }
 
-  void set<T>(dynamic id, T value) {
-    KvHelper.set('${name}_$id', value);
+  Future<void> set<T>(dynamic id, T value) async {
+    await KvHelper.set('${name}_$id', value);
   }
 
-  void delete(dynamic id) {
-    KvHelper.remove('${name}_$id');
+  Future<void> delete(dynamic id) async {
+    await KvHelper.remove('${name}_$id');
   }
 }
 
@@ -233,13 +247,15 @@ enum PlayerSettingsKeys {
   autoTranslate,
   translateTo,
   autoSkipFiller,
-  enableScreenshot,
   subtitleOpacity,
   subtitleBottomMargin,
   subtitleOutlineType,
   playerMenuAnimation,
   hardwareDecoder,
   preferredSubtitleLanguage,
+  videoOutput,
+  enableGestureSafeZones,
+  gestureSafeZoneMargin,
 }
 
 enum UISettingsKeys {
@@ -278,4 +294,3 @@ enum DownloadKeys {
   hlsParallelSegments,
   enableJxlCompression,
 }
-

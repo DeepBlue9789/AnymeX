@@ -5,23 +5,22 @@ import 'dart:async';
 import 'package:anymex/controllers/service_handler/service_handler.dart';
 import 'package:anymex/controllers/services/jikan.dart';
 import 'package:anymex/controllers/source/source_controller.dart';
-import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/database/isar_models/episode.dart';
 import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/screens/anime/widgets/episode_list_builder.dart';
-import 'package:anymex/screens/anime/widgets/wrongtitle_modal.dart';
 import 'package:anymex/screens/extensions/ExtensionSettings/ExtensionSettings.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex/utils/language.dart';
 import 'package:anymex/utils/logger.dart';
 import 'package:anymex/utils/theme_extensions.dart';
+import 'package:anymex/widgets/common/cloudflare_webview.dart';
 import 'package:anymex/widgets/common/no_source.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_dropdown.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_dialog.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_image.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_progress.dart';
+import 'package:anymex/widgets/common/skeleton_loader.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
-import 'package:anymex/widgets/custom_widgets/custom_textspan.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
 import 'package:anymex_extension_runtime_bridge/Services/Aniyomi/Models/Source.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart';
@@ -228,8 +227,54 @@ class _EpisodeSectionState extends State<EpisodeSection> {
       label: "SELECT SOURCE",
       icon: Icons.extension_rounded,
       onChanged: (DropdownItem item) => handleSourceChange(item.value),
-      actionIcon: Icons.settings_outlined,
-      onActionPressed: () => openSourcePreferences(context),
+      actions: selectedItem == null || sourceController.installedExtensions.isEmpty ? null : [
+        Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                final activeSource = sourceController.activeSource.value;
+                if (activeSource != null && activeSource.baseUrl != null) {
+                  final uri = Uri.parse(activeSource.baseUrl!);
+                  final origin = '${uri.scheme}://${uri.host}';
+                  print("Opening Cloudflare bypass for $origin");
+                  context.openCloudflareBypass(origin);
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: Icon(
+                  Icons.security_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary.opaque(0.8),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => openSourcePreferences(context),
+              child: Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: Icon(
+                  Icons.settings_outlined,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary.opaque(0.8),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -241,7 +286,7 @@ class _EpisodeSectionState extends State<EpisodeSection> {
 
     final newSubSource =
         activeSource.langs!.firstWhere((s) => s.id.toString() == value);
-    sourceController.setActiveSource(newSubSource);
+    sourceController.setActiveSource(newSubSource, mediaId: widget.anilistData?.id?.toString());
 
     widget.episodeError.value = false;
     widget.episodeList?.value = [];
@@ -384,128 +429,6 @@ class _EpisodeSectionState extends State<EpisodeSection> {
       return SliverMainAxisGroup(
         slivers: [
           if (serviceHandler.serviceType.value != ServicesType.extensions) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainer
-                        .opaque(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: context.colors.outline
-                          .opaque(0.2, iReallyMeanIt: true),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.colors.shadow
-                            .opaque(0.08, iReallyMeanIt: true),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: AnymexTextSpans(
-                          spans: [
-                            AnymexTextSpan(
-                              text: widget.searchedTitle.value,
-                              variant: TextVariant.semiBold,
-                              size: 14,
-                              color: widget.searchedTitle.value
-                                      .contains('No Match Found')
-                                  ? context.colors.error
-                                  : context.colors.primary,
-                            )
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      AnymexOnTap(
-                        onTap: () {
-                          showWrongTitleModal(
-                            context,
-                            widget.anilistData.title,
-                            (manga) async {
-                              widget.episodeList?.clear();
-                              _requestCounter.value++;
-                              int currentRequestId = _requestCounter.value;
-                              _episodeFuture.value = Future(() async {
-                                await widget.getDetailsFromSource(
-                                    Media.froDMedia(manga, ItemType.anime));
-                                if (_requestCounter.value != currentRequestId) {
-                                  throw Exception('Request cancelled');
-                                }
-                                return widget.episodeList?.value ?? [];
-                              });
-                              final key =
-                                  '${sourceController.activeSource.value?.id}-${widget.anilistData.id}-${widget.anilistData.serviceType.index}';
-                              DynamicKeys.mappedMediaTitle
-                                  .set(key, manga.title);
-                            },
-                            mediaId: widget.anilistData.id.toString(),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color:
-                                context.colors.primaryContainer.opaque(0.4),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .outline
-                                  .opaque(0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.swap_horiz_rounded,
-                                size: 14,
-                                color: context.colors.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              AnymexText(
-                                text: "Wrong Title?",
-                                size: 12,
-                                color: context.colors.primary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 20)),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  children: [Expanded(child: buildSourceDropdown())],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: buildLanguageDropdown(),
-              ),
-            ),
           ],
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
           SliverPadding(
@@ -636,12 +559,7 @@ class _EpisodeSectionState extends State<EpisodeSection> {
       }
 
       if (widget.episodeList?.isEmpty ?? true) {
-        return const SliverToBoxAdapter(
-          child: SizedBox(
-            height: 500,
-            child: Center(child: AnymexProgressIndicator()),
-          ),
-        );
+        return const EpisodeListSkeleton(isSliver: true);
       }
 
       return EpisodeListBuilder(

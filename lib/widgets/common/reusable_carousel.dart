@@ -10,7 +10,7 @@ import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/animation/slide_scale.dart';
 import 'package:anymex/widgets/common/cards/base_card.dart';
 import 'package:anymex/widgets/common/cards/card_gate.dart';
-import 'package:anymex/widgets/custom_widgets/anymex_progress.dart';
+import 'package:anymex/widgets/common/skeleton_loader.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
@@ -57,6 +57,10 @@ class _ReusableCarouselState extends State<ReusableCarousel> {
       return const SizedBox.shrink();
     }
 
+    if (widget.isLoading) {
+      return CarouselSkeleton(title: widget.title, showSpinner: true);
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Column(
@@ -64,9 +68,7 @@ class _ReusableCarouselState extends State<ReusableCarousel> {
         children: [
           _buildHeaderTitle(),
           const SizedBox(height: 10),
-          widget.isLoading
-              ? const Center(child: AnymexProgressIndicator())
-              : _buildCarouselList(),
+          _buildCarouselList(),
         ],
       ),
     );
@@ -121,11 +123,34 @@ class _ReusableCarouselState extends State<ReusableCarousel> {
   Widget _buildCarouselList() {
     final List<CarouselData> processedData =
         convertData(widget.data, variant: widget.variant);
+    final isContinueWatching = widget.title.toLowerCase().contains("continue");
 
     return Obx(() {
+      final cardHeight = getCardHeight(
+          CardStyle.values[settingsController.cardStyle], getPlatform(context));
+
+      if (isContinueWatching) {
+        return SizedBox(
+          height: (cardHeight * 2) + 25, // 2 rows + padding/spacing
+          child: GridView.builder(
+            itemCount: processedData.length,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(left: 15, top: 5, bottom: 10),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              mainAxisExtent: cardHeight *
+                  0.7, // Estimate a reasonable width for grid items
+            ),
+            itemBuilder: (context, index) =>
+                _buildCarouselItem(processedData[index], index),
+          ),
+        );
+      }
+
       return SizedBox(
-        height: getCardHeight(CardStyle.values[settingsController.cardStyle],
-            getPlatform(context)),
+        height: cardHeight,
         child: SuperListView.builder(
           itemCount: processedData.length,
           scrollDirection: Axis.horizontal,
@@ -138,22 +163,78 @@ class _ReusableCarouselState extends State<ReusableCarousel> {
   }
 
   Widget _buildCarouselItem(CarouselData itemData, int index) {
-    final tag = '${itemData.hashCode}-${itemData.id}';
+    final tag = '${widget.title}-${itemData.id}';
+    final isContinueWatching = widget.title.toLowerCase().contains('continue');
 
     return Obx(() {
       final card = settingsController.enableAnimation
           ? SlideAndScaleAnimation(child: _buildCard(itemData, tag))
           : _buildCard(itemData, tag);
 
-      final child = AnymexOnTap(
+      Widget child = AnymexOnTap(
         onTap: () => _navigateToDetailsPage(itemData, tag),
         child: GestureDetector(
-          onLongPress: () => widget.type == ItemType.novel ? {} : _showPeekPopup(context, itemData, tag),
+          onLongPress: () => widget.type == ItemType.novel
+              ? {}
+              : _showPeekPopup(context, itemData, tag),
           child: card,
         ),
       );
+
+      // Glow when 1-2 episodes remain in Continue Watching
+      if (isContinueWatching) {
+        final remaining = _computeRemainingEpisodes(itemData.episodes);
+        if (remaining != null && remaining > 0 && remaining <= 2) {
+          // Tweak these values to independently control the horizontal and vertical glow sizes
+          // Negative values shrink the glow on that axis, positive values expand it.
+          const double horizontalGlowSpread = -3.0;
+          const double verticalGlowSpread = 1.0;
+
+          child = Stack(
+            clipBehavior: Clip.none,
+            fit: StackFit.passthrough,
+            children: [
+              // Shadow casting layer
+              Positioned(
+                left: -horizontalGlowSpread,
+                right: -horizontalGlowSpread,
+                top: -verticalGlowSpread,
+                bottom: -verticalGlowSpread,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: context.colors.primary.withOpacity(0.65),
+                        blurRadius: 5.0,
+                        spreadRadius: 0.5,
+                        offset: Offset.zero,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Actual card content
+              child,
+            ],
+          );
+        }
+      }
+
       return child;
     });
+  }
+
+  /// Parses `"watched | total"` episode strings like `"12 | 24"`.
+  /// Returns (total - watched) if parseable, otherwise null.
+  int? _computeRemainingEpisodes(String? episodes) {
+    if (episodes == null || episodes.isEmpty) return null;
+    final parts = episodes.split('|');
+    if (parts.length < 2) return null;
+    final watched = int.tryParse(parts[0].trim());
+    final total = int.tryParse(parts[1].trim());
+    if (watched == null || total == null || total <= 0) return null;
+    return (total - watched).clamp(0, total);
   }
 
   void _showPeekPopup(BuildContext context, CarouselData itemData, String tag) {
@@ -186,20 +267,22 @@ class _ReusableCarouselState extends State<ReusableCarousel> {
       if (mediaType == ItemType.novel || widget.type == ItemType.novel) {
         final source =
             widget.source ?? sourceController.installedNovelExtensions.first;
-        navigate(() => NovelDetailsPage(
+        navigateWithAnimation(() => NovelDetailsPage(
               media: media,
-              tag: media.title,
+              tag: tag,
               source: source,
             ));
       } else if (mediaType == ItemType.manga) {
-        navigate(() => MangaDetailsPage(
+        navigateWithAnimation(() => MangaDetailsPage(
               media: media,
-              tag: media.title,
+              tag: tag,
             ));
       } else {
-        navigate(() => AnimeDetailsPage(
+        final isContinueWatching = widget.title == "Continue Watching";
+        navigateWithAnimation(() => AnimeDetailsPage(
               media: media,
-              tag: media.title,
+              tag: tag,
+              initialTabIndex: isContinueWatching ? 1 : 0,
             ));
       }
     }

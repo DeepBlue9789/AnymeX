@@ -20,6 +20,7 @@ import 'package:anymex/screens/anime/widgets/voice_actor.dart';
 import 'package:anymex/screens/anime/widgets/wrongtitle_modal.dart';
 import 'package:anymex/screens/manga/widgets/chapter_section.dart';
 import 'package:anymex/screens/manga/widgets/manga_stats.dart';
+import 'package:anymex/utils/color_extractor.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex/utils/logger.dart';
 import 'package:anymex/utils/media_share.dart';
@@ -42,7 +43,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:anymex/controllers/services/community_service.dart';
 import 'package:anymex/widgets/non_widgets/recommend_button.dart';
@@ -141,6 +142,10 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
   @override
   void initState() {
     super.initState();
+    posterColor = widget.media.color;
+    if (posterColor.isEmpty && widget.media.poster.isNotEmpty) {
+      _extractPosterColor();
+    }
     final initialPage = widget.initialTabIndex.clamp(0, 2).toInt();
     selectedPage.value = initialPage;
     controller = PageController(initialPage: initialPage);
@@ -150,6 +155,20 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
     });
 
     _fetchAnilistData();
+  }
+
+  Future<void> _extractPosterColor() async {
+    final posterUrl = widget.media.poster;
+    if (posterUrl.isEmpty) return;
+    try {
+      final color = await ImageColorExtractor.extractColor(posterUrl);
+      if (color != null && mounted && posterColor.isEmpty) {
+        setState(() {
+          posterColor =
+              '#${color.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+        });
+      }
+    } catch (_) {}
   }
 
   void _checkMangaPresence() {
@@ -180,12 +199,12 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
     try {
       Media tempData;
       try {
-        tempData = await mediaService.service
-            .fetchDetails(FetchDetailsParams(id: widget.media.id.toString()));
+        tempData = await mediaService.service.fetchDetails(FetchDetailsParams(
+            id: widget.media.id.toString(), type: ItemType.manga));
       } catch (e) {
         if (!e.toString().contains("dynamic")) rethrow;
-        tempData = await mediaService.service
-            .fetchDetails(FetchDetailsParams(id: widget.media.id.toString()));
+        tempData = await mediaService.service.fetchDetails(FetchDetailsParams(
+            id: widget.media.id.toString(), type: ItemType.manga));
       }
       final isExtensions = mediaService == ServicesType.extensions;
 
@@ -195,11 +214,19 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
             ..id = widget.media.id
             ..title = widget.media.title
             ..poster = widget.media.poster;
+          if (tempData.color.isNotEmpty && posterColor.isEmpty) {
+            posterColor = tempData.color;
+          }
         } else {
           anilistData = tempData;
-          posterColor = tempData.color;
+          if (tempData.color.isNotEmpty) {
+            posterColor = tempData.color;
+          }
         }
       });
+      if (posterColor.isEmpty) {
+        _extractPosterColor();
+      }
       DiscordRPCController.instance
           .updateMediaPresence(media: anilistData ?? widget.media);
       CommentPreloader.to.removePreloadedController(widget.media.id.toString());
@@ -248,21 +275,25 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
   Future<void> _mapToService({int? requestId}) async {
     final activeRequestId = requestId ?? _beginChapterRequest();
     chapterList?.clear();
-    final key =
-        '${sourceController.activeMangaSource.value?.id}-${anilistData?.id}-${mediaService.index}';
-    final savedTitle = DynamicKeys.mappedMediaTitle.get<String?>(key, null);
-    final baseMedia = anilistData ?? widget.media;
-    final mappedData = await SourceMapper.mapMedia(
-        formatTitles(baseMedia), searchedTitle,
-        mediaId: widget.media.id.toString(),
-        type: ItemType.manga,
-        savedTitle: savedTitle,
-        synonyms: anilistData?.synonyms ?? []);
-    if (_isStaleChapterRequest(activeRequestId) || !mounted) {
-      return;
-    }
-    if (mappedData != null && mappedData.id.toString().isNotEmpty) {
-      await _fetchSourceDetails(mappedData, requestId: activeRequestId);
+    try {
+      final key =
+          '${sourceController.activeMangaSource.value?.id}-${anilistData?.id}-${mediaService.index}';
+      final savedTitle = DynamicKeys.mappedMediaTitle.get<String?>(key, null);
+      final baseMedia = anilistData ?? widget.media;
+      final mappedData = await SourceMapper.mapMedia(
+          formatTitles(baseMedia), searchedTitle,
+          mediaId: widget.media.id.toString(),
+          type: ItemType.manga,
+          savedTitle: savedTitle,
+          synonyms: anilistData?.synonyms ?? []);
+      if (_isStaleChapterRequest(activeRequestId) || !mounted) {
+        return;
+      }
+      if (mappedData != null && mappedData.id.toString().isNotEmpty) {
+        await _fetchSourceDetails(mappedData, requestId: activeRequestId);
+      }
+    } catch (e, s) {
+      Logger.e("Error during manga _mapToService: $e\n$s");
     }
   }
 
@@ -271,7 +302,7 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
     final convertedEpisodes = _convertChapters(chapters, tempData.title);
 
     chapterList?.value = convertedEpisodes;
-    searchedTitle.value = "Found: ${tempData.title}";
+    searchedTitle.value = tempData.title;
     setState(() {});
   }
 
@@ -297,7 +328,7 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
         episodeFuture.title ?? '',
       );
       chapterList?.value = episodes;
-      searchedTitle.value = "Found: ${media.title}";
+      searchedTitle.value = media.title;
 
       setState(() {});
     } catch (e, s) {
@@ -713,7 +744,7 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
                     Get.back();
                   },
                   selectedIcon: Iconsax.back_square,
-                  unselectedIcon: IconlyBold.arrow_left,
+                  unselectedIcon: IconlyBold.arrowLeft,
                 ),
               ),
               const SizedBox(height: 10),
@@ -750,7 +781,7 @@ class _MangaDetailsPageState extends State<MangaDetailsPage> {
     return Obx(() => ResponsiveNavBar(
             isDesktop: false,
             currentIndex: selectedPage.value,
-            margin: const EdgeInsets.symmetric(horizontal: 80, vertical: 40),
+            margin: const EdgeInsets.symmetric(horizontal: 60, vertical: 30),
             items: [
               NavItem(
                   onTap: _onPageSelected,

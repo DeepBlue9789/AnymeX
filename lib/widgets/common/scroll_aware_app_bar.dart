@@ -16,18 +16,20 @@ class CustomAnimatedAppBar extends StatefulWidget {
   final SystemUiOverlayStyle? hiddenStatusBarStyle;
   static const double kAppBarOffset = 20.0;
   final double scrollThreshold;
+  final double height;
 
   const CustomAnimatedAppBar({
     super.key,
     required this.isVisible,
-    this.animationDuration = const Duration(milliseconds: 450),
-    this.animationCurve = Curves.easeInOut,
+    this.animationDuration = const Duration(milliseconds: 200),
+    this.animationCurve = Curves.easeOut,
     this.scrollController,
     required this.headerContent,
     this.backgroundColor,
     this.visibleStatusBarStyle = SystemUiOverlayStyle.dark,
     this.hiddenStatusBarStyle = SystemUiOverlayStyle.light,
     this.scrollThreshold = 10.0,
+    this.height = 72.0,
   });
 
   @override
@@ -119,6 +121,7 @@ class _CustomAnimatedAppBarState extends State<CustomAnimatedAppBar>
               bottomPadding: 10,
               content: widget.headerContent,
               isAtTop: isAtTop,
+              height: widget.height,
             );
           },
         );

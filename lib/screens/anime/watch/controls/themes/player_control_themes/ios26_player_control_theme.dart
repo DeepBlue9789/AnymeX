@@ -1,19 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/setup/player_control_theme.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/bottom_sheet.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/control_button.dart';
+import 'package:anymex/screens/anime/watch/controls/widgets/decoder_quick_button.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/progress_slider.dart';
 import 'package:anymex/screens/settings/sub_settings/settings_player.dart';
+import 'package:anymex/utils/theme_extensions.dart';
 import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:material_symbols_icons/material_symbols_icons.dart';
+
 
 class Ios26PlayerControlTheme extends PlayerControlTheme {
   Ios26PlayerControlTheme();
@@ -81,7 +82,7 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
           _IosGlassIconButton(
             icon: CupertinoIcons.back,
             tooltip: 'Back',
-            onPressed: () => Get.back(),
+            onPressed: () => controller.handleBack(),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -127,6 +128,7 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
                       if (qualityText.isEmpty) return const SizedBox.shrink();
                       return _GlassTag(text: qualityText);
                     }),
+                    DecoderQuickButton.glass(isMobile: !isDesktop),
                   ],
                 ),
               ],
@@ -149,19 +151,40 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
             icon: CupertinoIcons.settings_solid,
             tooltip: 'Settings',
             onPressed: () {
-              showModalBottomSheet(
-                context: Get.context!,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (sheetContext) => Container(
-                  height: MediaQuery.of(sheetContext).size.height,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: const BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(28)),
+              controller.showSheetWithPause(
+                () => showModalBottomSheet(
+                  context: Get.context!,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (sheetContext) => Container(
+                    margin: EdgeInsets.fromLTRB(
+                        16, 16, 16, MediaQuery.of(sheetContext).padding.bottom + 16),
+                    height: MediaQuery.of(sheetContext).size.height * 0.85,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: Get.theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Get.theme.colorScheme.outline
+                            .opaque(0.2, iReallyMeanIt: true),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Get.theme.colorScheme.primary
+                              .opaque(0.12, iReallyMeanIt: true),
+                          blurRadius: 24,
+                          offset: const Offset(0, 4),
+                        ),
+                        BoxShadow(
+                          color: Colors.black.opaque(0.35, iReallyMeanIt: true),
+                          blurRadius: 32,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const SettingsPlayer(isModal: true),
                   ),
-                  child: const SettingsPlayer(isModal: true),
                 ),
               );
             },
@@ -328,13 +351,14 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
                                     onTap: controller.isLocked.value
                                         ? null
                                         : controller.performSkipAction,
-                                    countdownProgress: controller
-                                            .isAutoSkipCountdownActive
-                                        ? controller.autoSkipCountdownRemaining
-                                            .value /
-                                            PlayerController
-                                                .autoSkipCountdownSeconds
-                                        : null,
+                                    countdownProgress:
+                                        controller.isAutoSkipCountdownActive
+                                            ? controller
+                                                    .autoSkipCountdownRemaining
+                                                    .value /
+                                                PlayerController
+                                                    .autoSkipCountdownSeconds
+                                            : null,
                                   )),
                             ),
                             const SizedBox(height: 8),
@@ -357,12 +381,13 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
                                 onTap: controller.isLocked.value
                                     ? null
                                     : controller.performSkipAction,
-                                countdownProgress: controller
-                                        .isAutoSkipCountdownActive
-                                    ? controller.autoSkipCountdownRemaining
-                                            .value /
-                                        PlayerController.autoSkipCountdownSeconds
-                                    : null,
+                                countdownProgress:
+                                    controller.isAutoSkipCountdownActive
+                                        ? controller.autoSkipCountdownRemaining
+                                                .value /
+                                            PlayerController
+                                                .autoSkipCountdownSeconds
+                                        : null,
                               )),
                         ),
                       ],
@@ -400,7 +425,7 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
 
     final Map<String, Widget> buttonWidgets = {
       'playlist': ControlButton(
-        icon: Symbols.playlist_play_rounded,
+        icon: Icons.playlist_play_rounded,
         onPressed: () {
           controller.isEpisodePaneOpened.value =
               !controller.isEpisodePaneOpened.value;
@@ -409,55 +434,57 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
         compact: true,
       ),
       'shaders': ControlButton(
-        icon: Symbols.tune_rounded,
+        icon: Icons.tune_rounded,
         onPressed: () => controller.openColorProfileBottomSheet(context),
         tooltip: 'Shaders & Color Profiles',
         compact: true,
       ),
       'source': ControlButton(
-        icon: Symbols.cloud_rounded,
+        icon: Icons.cloud_rounded,
         onPressed: () => controller.isSourcePaneOpened.value =
             !controller.isSourcePaneOpened.value,
         tooltip: 'Source',
         compact: true,
       ),
       'tracks': ControlButton(
-        icon: Symbols.library_music_rounded,
+        icon: Icons.library_music_rounded,
         onPressed: () => controller.isTracksPaneOpened.value =
             !controller.isTracksPaneOpened.value,
         tooltip: 'Tracks',
         compact: true,
       ),
       'sync_subs': ControlButton(
-        icon: Symbols.sync_rounded,
+        icon: Icons.sync_rounded,
         onPressed: () => controller.isSyncSubsPaneOpened.value =
             !controller.isSyncSubsPaneOpened.value,
         tooltip: 'Sync Subs',
         compact: true,
       ),
       'server': ControlButton(
-        icon: Symbols.cloud_rounded,
+        icon: Icons.cloud_rounded,
         onPressed: () =>
             PlayerBottomSheets.showVideoServers(context, controller),
         tooltip: 'Server',
         compact: true,
       ),
       'quality': ControlButton(
-        icon: Symbols.high_quality_rounded,
+        icon: Icons.high_quality_rounded,
         onPressed: () =>
             PlayerBottomSheets.showVideoQuality(context, controller),
         tooltip: 'Quality',
         compact: true,
       ),
       'speed': ControlButton(
-        icon: Symbols.speed_rounded,
-        onPressed: () =>
-            PlayerBottomSheets.showPlaybackSpeed(context, controller),
+        icon: Icons.speed_rounded,
+        onPressed: () {
+          controller.isSpeedPaneOpened.value =
+              !controller.isSpeedPaneOpened.value;
+        },
         tooltip: 'Speed',
         compact: true,
       ),
       'audio_track': ControlButton(
-        icon: Symbols.music_note_rounded,
+        icon: Icons.music_note_rounded,
         onPressed: () =>
             PlayerBottomSheets.showAudioTracks(context, controller),
         tooltip: 'Audio Track',
@@ -470,7 +497,7 @@ class Ios26PlayerControlTheme extends PlayerControlTheme {
         compact: true,
       ),
       'aspect_ratio': ControlButton(
-        icon: Symbols.fit_screen,
+        icon: Icons.fit_screen_rounded,
         onPressed: () => controller.toggleVideoFit(),
         onLongPress: controller.resetVideoFit,
         tooltip: 'Aspect Ratio',
@@ -587,9 +614,7 @@ class _GlassPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: DecoratedBox(
+      child: DecoratedBox(
           decoration: BoxDecoration(
             color: tint,
             borderRadius: BorderRadius.circular(radius),
@@ -610,7 +635,6 @@ class _GlassPanel extends StatelessWidget {
             padding: padding,
             child: child,
           ),
-        ),
       ),
     );
   }
@@ -723,7 +747,8 @@ class _GlassActionChip extends StatelessWidget {
                   child: TweenAnimationBuilder<double>(
                     duration: const Duration(milliseconds: 1000),
                     curve: Curves.linear,
-                    tween: Tween<double>(begin: 0.0, end: 1.0 - countdownProgress!),
+                    tween: Tween<double>(
+                        begin: 0.0, end: 1.0 - countdownProgress!),
                     builder: (context, value, child) {
                       return FractionallySizedBox(
                         alignment: Alignment.centerLeft,
@@ -738,7 +763,8 @@ class _GlassActionChip extends StatelessWidget {
                   ),
                 ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

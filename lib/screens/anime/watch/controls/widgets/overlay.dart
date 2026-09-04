@@ -9,25 +9,27 @@ class PlayerOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-        return Obx(() => Positioned.fill(
-          child: AnimatedContainer(
-            duration: controller.overlayAnimationDuration(100),
-            decoration: BoxDecoration(
-                gradient: LinearGradient(
-              colors: controller.showControls.value
-                  ? [
-                      Colors.transparent,
-                      Colors.black.opaque(0.2, iReallyMeanIt: true),
-                      Colors.transparent
-                    ]
-                  : [
-                      Colors.transparent,
-                      Colors.transparent,
-                      Colors.transparent
-                    ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            )),
+    return Obx(() => Positioned.fill(
+          child: RepaintBoundary(
+            child: AnimatedContainer(
+              duration: controller.overlayAnimationDuration(100),
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                colors: controller.showControls.value
+                    ? [
+                        Colors.transparent,
+                        Colors.black.opaque(0.2, iReallyMeanIt: true),
+                        Colors.transparent
+                      ]
+                    : [
+                        Colors.transparent,
+                        Colors.transparent,
+                        Colors.transparent
+                      ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              )),
+            ),
           ),
         ));
   }

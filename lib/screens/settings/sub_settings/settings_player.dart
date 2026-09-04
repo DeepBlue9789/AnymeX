@@ -31,7 +31,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:material_symbols_icons/material_symbols_icons.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 const Map<String, List<String>> fontGroups = {
@@ -74,29 +73,41 @@ class _DecoderOption {
   });
 }
 
+class _RendererOption {
+  final String value;
+  final String title;
+  final String description;
+
+  const _RendererOption({
+    required this.value,
+    required this.title,
+    required this.description,
+  });
+}
+
 final List<_BottomControl> _bottomControls = [
   const _BottomControl(
       id: 'playlist',
       name: 'Playlist',
-      icon: Symbols.playlist_play_rounded,
+      icon: Icons.playlist_play_rounded,
       defaultPosition: 'left'),
   const _BottomControl(
-      id: 'shaders', name: 'Shaders', icon: Symbols.tune_rounded),
+      id: 'shaders', name: 'Shaders', icon: Icons.tune_rounded),
   const _BottomControl(
-      id: 'source', name: 'Source', icon: Symbols.cloud_rounded),
+      id: 'source', name: 'Source', icon: Icons.cloud_rounded),
   const _BottomControl(
       id: 'tracks',
       name: 'Tracks (Audio/Subs)',
-      icon: Symbols.library_music_rounded),
+      icon: Icons.library_music_rounded),
   const _BottomControl(
-      id: 'sync_subs', name: 'Sync Subs', icon: Symbols.sync_rounded),
-  const _BottomControl(id: 'speed', name: 'Speed', icon: Symbols.speed_rounded),
+      id: 'sync_subs', name: 'Sync Subs', icon: Icons.sync_rounded),
+  const _BottomControl(id: 'speed', name: 'Speed', icon: Icons.speed_rounded),
   const _BottomControl(
       id: 'orientation',
       name: 'Orientation',
       icon: Icons.screen_rotation_rounded),
   const _BottomControl(
-      id: 'aspect_ratio', name: 'Aspect Ratio', icon: Symbols.fit_screen),
+      id: 'aspect_ratio', name: 'Aspect Ratio', icon: Icons.fit_screen),
 ];
 
 class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStateMixin {
@@ -766,6 +777,11 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
     if (Platform.isIOS || Platform.isMacOS) {
       return const [
         _DecoderOption(
+          value: 'hw+',
+          title: 'HW+',
+          description: 'videotoolbox',
+        ),
+        _DecoderOption(
           value: 'hw',
           title: 'HW',
           description: 'videotoolbox',
@@ -780,6 +796,11 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
 
     if (Platform.isWindows) {
       return const [
+        _DecoderOption(
+          value: 'hw+',
+          title: 'HW+',
+          description: 'd3d11va-copy',
+        ),
         _DecoderOption(
           value: 'hw',
           title: 'HW',
@@ -796,6 +817,11 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
     if (Platform.isLinux) {
       return const [
         _DecoderOption(
+          value: 'hw+',
+          title: 'HW+',
+          description: 'vaapi-copy',
+        ),
+        _DecoderOption(
           value: 'hw',
           title: 'HW',
           description: 'vaapi',
@@ -810,6 +836,11 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
 
     return const [
       _DecoderOption(
+        value: 'hw+',
+        title: 'HW+',
+        description: 'auto-copy',
+      ),
+      _DecoderOption(
         value: 'hw',
         title: 'HW',
         description: 'auto',
@@ -820,6 +851,70 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
         description: 'no',
       ),
     ];
+  }
+
+  List<_RendererOption> get _rendererOptions {
+    final list = [
+      const _RendererOption(
+        value: 'auto',
+        title: 'Auto (GPU)',
+        description: 'Auto-select (default)',
+      ),
+      const _RendererOption(
+        value: 'gpu',
+        title: 'GPU',
+        description: 'Standard GPU rendering',
+      ),
+      const _RendererOption(
+        value: 'gpu-next',
+        title: 'GPU Next (Vulkan)',
+        description: 'Experimental high-performance renderer',
+      ),
+    ];
+
+    if (Platform.isAndroid) {
+      list.add(
+        const _RendererOption(
+          value: 'mediacodec_embed',
+          title: 'MediaCodec Embed',
+          description: 'Direct surface rendering (Android only)',
+        ),
+      );
+    }
+    return list;
+  }
+
+  String _rendererTitle(String value) {
+    final match = _rendererOptions.firstWhere(
+      (option) => option.value == value,
+      orElse: () => _rendererOptions.first,
+    );
+    return match.title;
+  }
+
+  String _rendererDescription(String value) {
+    final match = _rendererOptions.firstWhere(
+      (option) => option.value == value,
+      orElse: () => _rendererOptions.first,
+    );
+    return match.description;
+  }
+
+  void _showRendererSelectionDialog() {
+    final options = _rendererOptions;
+    if (options.isEmpty) return;
+
+    showSelectionDialog<String>(
+      title: 'Video Renderer',
+      items: options.map((option) => option.value).toList(),
+      selectedItem: settings.videoOutput.obs,
+      getTitle: _rendererTitle,
+      onItemSelected: (value) {
+        settings.videoOutput = value;
+        setState(() {});
+      },
+      leadingIcon: Icons.settings_system_daydream_rounded,
+    );
   }
 
   String _decoderTitle(String value) {
@@ -884,19 +979,29 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
       Expanded(
         child: SingleChildScrollView(
           padding: getResponsiveValue(context,
-              mobileValue: const EdgeInsets.fromLTRB(10.0, 20.0, 10.0, 50.0),
-              desktopValue: const EdgeInsets.fromLTRB(25.0, 20.0, 25.0, 20.0)),
+              mobileValue: const EdgeInsets.fromLTRB(10.0, 12.0, 10.0, 24.0),
+              desktopValue: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 16.0)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (widget.isModal) ...[
-                const Center(
-                  child: Text("Player Settings",
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-                )
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Player Settings",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.of(context).pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
               ],
-              SizedBox(height: widget.isModal ? 30.0 : 0),
               Obx(() => Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -917,6 +1022,18 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
                                   description:
                                       _decoderDescription(settings.hardwareDecoder),
                                   onTap: _showDecoderModeDialog,
+                                ),
+                                CustomTile(
+                                  padding: 10,
+                                  icon: Icons.settings_system_daydream_rounded,
+                                  title: 'Video Renderer',
+                                  isDescBold: true,
+                                  descColor: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                  description:
+                                      _rendererDescription(settings.videoOutput),
+                                  onTap: _showRendererSelectionDialog,
                                 ),
                               ],
                             )),
@@ -1821,13 +1938,30 @@ class _SettingsPlayerState extends State<SettingsPlayer> with TickerProviderStat
                                       settings.enableSwipeControls = val),
                               CustomSwitchTile(
                                   padding: const EdgeInsets.all(10),
-                                  icon: Icons.screenshot_rounded,
-                                  title: "Save Last Frame",
+                                  icon: Icons.edgesensor_high_rounded,
+                                  title: "Gesture Safe Zones",
                                   description:
-                                      "Saves a screenshot of the last frame you watched. Disabling this significantly reduces storage usage",
-                                  switchValue: settings.enableScreenshot,
-                                  onChanged: (val) =>
-                                      settings.enableScreenshot = val),
+                                      "Prevent swipe gestures from triggering near top, bottom, and side edges for system navigation",
+                                  switchValue: settings.enableGestureSafeZones,
+                                  onChanged: (val) => setState(() =>
+                                      settings.enableGestureSafeZones = val)),
+                              if (settings.enableGestureSafeZones)
+                                CustomSliderTile(
+                                  sliderValue: settings.gestureSafeZoneMargin,
+                                  min: 20,
+                                  max: 70,
+                                  divisions: 10,
+                                  onChanged: (double value) {
+                                    setState(() {
+                                      settings.gestureSafeZoneMargin = value;
+                                    });
+                                  },
+                                  label: '${settings.gestureSafeZoneMargin.toInt()}dp',
+                                  title: 'Safe Zone Margin',
+                                  description:
+                                      'Adjust edge safe zone width/height threshold',
+                                  icon: Icons.border_outer_rounded,
+                                ),
                               CustomSwitchTile(
                                   padding: const EdgeInsets.all(10),
                                   icon: Icons.animation_rounded,

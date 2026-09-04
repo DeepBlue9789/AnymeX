@@ -32,6 +32,7 @@ class LibraryController extends GetxController {
     super.onInit();
     _migrateGridDefaultToAuto();
     getPreferences();
+    offlineStorage.refreshHistoryEpisodes();
   }
 
   void _migrateGridDefaultToAuto() {
@@ -194,7 +195,7 @@ class LibraryController extends GetxController {
     return getLibraryStream().map((items) {
       if (type.value.isAnime) {
         var filtered = items
-            .where((e) => e.currentEpisode?.currentTrack != null)
+            .where((e) => e.currentEpisode?.timeStampInMilliseconds != null)
             .toList();
         filtered.sort((a, b) => (b.currentEpisode?.lastWatchedTime ?? 0)
             .compareTo(a.currentEpisode?.lastWatchedTime ?? 0));

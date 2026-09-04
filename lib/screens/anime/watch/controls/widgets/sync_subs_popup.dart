@@ -1,10 +1,11 @@
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/episodes_pane.dart';
-import 'package:anymex/screens/anime/watch/player/better_player.dart';
+
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:material_symbols_icons/symbols.dart';
+
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class SyncSubsPopup extends StatelessWidget {
@@ -77,7 +78,6 @@ class _SyncSubsContentState extends State<_SyncSubsContent> {
     final cs = theme.colorScheme;
     // final isBetterPlayer = widget.controller.basePlayer is BetterPlayerImpl;
 
-
     return Column(
       children: [
         _buildHeader(cs, theme),
@@ -91,8 +91,9 @@ class _SyncSubsContentState extends State<_SyncSubsContent> {
   }
 
   Widget _buildHeader(ColorScheme cs, ThemeData theme) {
+    final isDesktop = !Platform.isAndroid && !Platform.isIOS;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16 + 40, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, isDesktop ? 16 + 40 : 16, 16, 16),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withOpacity(0.3),
         border: Border(
@@ -107,7 +108,7 @@ class _SyncSubsContentState extends State<_SyncSubsContent> {
               color: cs.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Symbols.sync_rounded, color: cs.primary, size: 20),
+            child: Icon(Icons.sync_rounded, color: cs.primary, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -128,33 +129,6 @@ class _SyncSubsContentState extends State<_SyncSubsContent> {
               ),
               child: Icon(Icons.close,
                   size: 20, color: cs.onSurface.withOpacity(0.7)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUnsupportedBanner(ColorScheme cs, ThemeData theme) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.errorContainer.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.error.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, color: cs.error, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Subtitle delay not supported with BetterPlayer. Use Libmpv.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onErrorContainer,
-                fontWeight: FontWeight.w500,
-              ),
             ),
           ),
         ],
@@ -401,7 +375,7 @@ class _SyncSubsContentState extends State<_SyncSubsContent> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Symbols.subtitles_off_rounded,
+          Icon(Icons.subtitles_off_rounded,
               size: 48, color: cs.onSurface.withOpacity(0.3)),
           const SizedBox(height: 16),
           Text(

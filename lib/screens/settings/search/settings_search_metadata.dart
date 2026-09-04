@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:iconsax/iconsax.dart';
 
 class SettingsSearchMetadataItem {
@@ -172,10 +172,10 @@ const settingsSearchIndex = <String, Map<String?, List<String>>>{
     'Appearance': [
       'Default Theme',
       'Material You',
+      'Use Poster Color',
       'Liquid Mode',
       'Liquid Background',
       'Retain Original Color',
-      'Use Poster Color',
     ],
     'Extras': [
       'Bloom',
@@ -261,7 +261,6 @@ const settingsSearchTitleIcons = <String, IconData>{
   'Auto Skip Once Only': Icons.all_inclusive,
   'Auto Skip Filler': Icons.skip_next_rounded,
   'Enable Swipe Controls': Icons.play_disabled_rounded,
-  'Save Last Frame': Icons.screenshot_rounded,
   'Animate Control Overlay': Icons.animation_rounded,
   'DoubleTap to Seek': Iconsax.forward5,
   'MegaSkip Duration': Iconsax.forward5,

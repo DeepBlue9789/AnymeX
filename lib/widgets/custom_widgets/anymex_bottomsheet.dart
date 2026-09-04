@@ -1,3 +1,4 @@
+import 'package:anymex/controllers/settings/settings.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
 import 'package:blur/blur.dart';
 import 'package:flutter/material.dart';
@@ -52,8 +53,7 @@ class AnymexSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // final useBlur = settingsController.liquidMode;
-    const useBlur = false;
+    final useBlur = Get.isRegistered<Settings>() && Get.find<Settings>().liquidMode;
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
       child: Stack(

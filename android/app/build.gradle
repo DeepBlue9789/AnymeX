@@ -12,7 +12,7 @@ android {
     namespace = "com.ryan.anymex"
     compileSdk = 36
     // ndkVersion = flutter.ndkVersion
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "28.2.13676358"
 
     dependenciesInfo {
         includeInApk = false
@@ -59,10 +59,10 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.release
-            minifyEnabled false
-            shrinkResources false
-            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig = signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
 
         debug {

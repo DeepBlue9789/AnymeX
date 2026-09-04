@@ -39,27 +39,28 @@ class RecentlyOpenedAnimeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colors;
+    final heroTag = '${media.id}-recent-${media.createdAt?.millisecondsSinceEpoch ?? ''}';
 
     return AnymexOnTap(
       onTap: () {
         if (serviceHandler.serviceType.value == ServicesType.simkl) {
           navigate(() =>
-              AnimeDetailsPage(media: media, tag: media.createdAt.toString()));
+              AnimeDetailsPage(media: media, tag: heroTag));
           return;
         }
         if (media.type == "ANIME") {
           navigate(() =>
-              AnimeDetailsPage(media: media, tag: media.createdAt.toString()));
+              AnimeDetailsPage(media: media, tag: heroTag));
         } else {
           navigate(() =>
-              MangaDetailsPage(media: media, tag: media.createdAt.toString()));
+              MangaDetailsPage(media: media, tag: heroTag));
         }
       },
       child: Container(
         margin: const EdgeInsets.only(left: 15),
         width: getResponsiveSize(context,
-            mobileSize: MediaQuery.of(context).size.width / 1.5,
-            desktopSize: MediaQuery.of(context).size.width / 3),
+          mobileSize: MediaQuery.of(context).size.width / 1.5,
+          desktopSize: MediaQuery.of(context).size.width / 3),
         child: AnymexCard(
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
@@ -71,12 +72,14 @@ class RecentlyOpenedAnimeCard extends StatelessWidget {
           ),
           color: colorScheme.secondaryContainer.withAlpha(100),
           child: SizedBox(
-            height: 100,
+            height: 70,
             child: Row(
               children: [
                 // Poster image
                 Hero(
-                  tag: media.createdAt.toString(),
+                  tag: heroTag,
+                  transitionOnUserGestures: true,
+                  flightShuttleBuilder: AnymeXImage.heroFlightShuttleBuilder,
                   child: ClipRRect(
                     borderRadius: BorderRadius.only(
                       topLeft: Radius.circular(12.multiplyRadius()),
@@ -84,9 +87,11 @@ class RecentlyOpenedAnimeCard extends StatelessWidget {
                     ),
                     child: AnymeXImage(
                       imageUrl: media.poster,
-                      width: 80,
-                      height: 100,
+                      width: 55,
+                      height: 70,
                       radius: 0,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
                     ),
                   ),
                 ),

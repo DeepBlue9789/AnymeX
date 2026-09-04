@@ -24,13 +24,11 @@ List<Color> colorList = colorMap.values.toList();
 List<String> colorKeys = colorMap.keys.toList();
 
 Map<String, BoxFit> resizeModes = {
-  for (var e in BoxFit.values)
-    if (e != BoxFit.none)
-      capitalize(e.name) +
-          (e == BoxFit.contain ? ' (default)' : '') +
-          (e == BoxFit.fill ? ' (Stretch) ' : ''): e,
+  'Best Fit': BoxFit.contain,
+  'Crop to Fit': BoxFit.cover,
+  'Stretch': BoxFit.fill,
 };
-List<String> resizeModeList = resizeModes.keys.toList()..sort();
+List<String> resizeModeList = resizeModes.keys.toList();
 
 Map<String, DynamicSchemeVariant> dynamicSchemeVariantMap = {
   for (var variant in DynamicSchemeVariant.values)

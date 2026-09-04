@@ -1,4 +1,5 @@
 import 'package:anymex/controllers/service_handler/service_handler.dart';
+import 'package:anymex/models/Media/media.dart';
 
 class TrackedMedia {
   String? id;
@@ -10,6 +11,7 @@ class TrackedMedia {
   String? rating;
   String? totalEpisodes;
   String? releasedEpisodes;
+  NextAiringEpisode? nextAiringEpisode;
   String? watchingStatus;
   String? format;
   String? mediaStatus;
@@ -39,6 +41,7 @@ class TrackedMedia {
     this.rating,
     this.totalEpisodes,
     this.releasedEpisodes,
+    this.nextAiringEpisode,
     this.watchingStatus,
     this.format,
     this.mediaStatus,
@@ -73,6 +76,9 @@ class TrackedMedia {
       totalEpisodes: json['media']['episodes']?.toString(),
       releasedEpisodes: json['media']['nextAiringEpisode'] != null
           ? (json['media']['nextAiringEpisode']['episode'] - 1).toString()
+          : null,
+      nextAiringEpisode: json['media']['nextAiringEpisode'] != null
+          ? NextAiringEpisode.fromJson(json['media']['nextAiringEpisode'])
           : null,
       rating:
           (double.tryParse(json['media']['averageScore']?.toString() ?? "0")! /
@@ -161,12 +167,13 @@ class TrackedMedia {
   }
 
   factory TrackedMedia.fromMAL(Map<String, dynamic> json) {
+    final isMangaResolved = json['node']?['num_chapters'] != null || json['list_status']?['num_chapters_read'] != null;
     return TrackedMedia(
       id: json['node']['id']?.toString(),
       idMal: json['node']['id']?.toString(),
       title: json['node']['title'],
       servicesType: ServicesType.mal,
-      poster: json['node']['main_picture']['large'],
+      poster: json['node']['main_picture']?['large'] ?? json['node']['main_picture']?['medium'] ?? '',
       chapterCount:
           json['node']?['list_status']?['num_chapters_read']?.toString() ?? '?',
       episodeCount: json['list_status']?['num_chapters_read']?.toString() ??
@@ -178,7 +185,7 @@ class TrackedMedia {
       rating: json['node']?['mean']?.toString() ?? '?',
       watchingStatus: returnConvertedStatus(json['list_status']['status']),
       score: json['list_status']['score']?.toString(),
-      type: null,
+      type: isMangaResolved ? 'MANGA' : 'ANIME',
       mediaListId: json['node']['id']?.toString(),
       startedAt: _parseMalDate(json['list_status']?['start_date']),
       completedAt: _parseMalDate(json['list_status']?['finish_date']),

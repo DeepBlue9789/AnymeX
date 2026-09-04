@@ -1,4 +1,5 @@
 import 'package:anymex/utils/theme_extensions.dart';
+import 'package:anymex/widgets/common/anymex_slider_m3.dart';
 import 'package:anymex/widgets/common/glow.dart';
 import 'package:anymex/widgets/common/slider_semantics.dart';
 import 'package:anymex/widgets/custom_widgets/custom_icon_wrapper.dart';
@@ -6,7 +7,7 @@ import 'package:anymex/widgets/custom_widgets/custom_text.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 
 class SettingsHighlightProvider extends InheritedWidget {
   final String highlightTitle;
@@ -138,7 +139,7 @@ class CustomSwitchTile extends StatelessWidget {
     required this.description,
     required this.switchValue,
     required this.onChanged,
-    this.padding = const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+    this.padding = const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
   });
 
   @override
@@ -147,8 +148,8 @@ class CustomSwitchTile extends StatelessWidget {
       padding: padding,
       child: Row(
         children: [
-          AnymexIcon(icon, size: 30, color: context.colors.primary),
-          const SizedBox(width: 20),
+          AnymexIcon(icon, size: 22, color: context.colors.primary),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,16 +157,16 @@ class CustomSwitchTile extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w600,
                     color: context.colors.onSurface,
                   ),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 2),
                 Text(
                   description,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12.5,
                     color: Theme.of(context).colorScheme.onSurface.opaque(0.6),
                   ),
                 ),
@@ -232,16 +233,17 @@ class CustomTile extends StatelessWidget {
           onTap: onTap,
           child: InkWell(
             onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: EdgeInsets.symmetric(
-                  horizontal: padding ?? 20.0, vertical: 10.0),
+                  horizontal: padding ?? 16.0, vertical: 6.0),
               child: Row(
                 children: [
                   if (prefix == null)
-                    AnymexIcon(icon, size: 30, color: context.colors.primary)
+                    AnymexIcon(icon, size: 22, color: context.colors.primary)
                   else
                     prefix!,
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,16 +251,16 @@ class CustomTile extends StatelessWidget {
                         Text(
                           title,
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14.5,
                             fontWeight: FontWeight.w600,
                             color: context.colors.onSurface,
                           ),
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 2),
                         Text(
                           description,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 12.5,
                             fontFamily: (isDescBold ?? false)
                                 ? "Poppins-Bold"
                                 : "Poppins",
@@ -273,8 +275,7 @@ class CustomTile extends StatelessWidget {
                     ),
                   ),
                   if (postFix == null)
-                    Icon(IconlyLight.arrow_right_2,
-                        color: context.colors.primary)
+                    Icon(IconlyLight.arrowRight2, size: 18, color: context.colors.primary)
                   else
                     postFix!
                 ],
@@ -336,13 +337,13 @@ class CustomSliderTile extends StatelessWidget {
           },
           child: Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
             child: Column(
               children: [
                 Row(
                   children: [
-                    AnymexIcon(icon, size: 30, color: context.colors.primary),
-                    const SizedBox(width: 20),
+                    AnymexIcon(icon, size: 22, color: context.colors.primary),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,16 +351,16 @@ class CustomSliderTile extends StatelessWidget {
                           Text(
                             title,
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14.5,
                               fontWeight: FontWeight.w600,
                               color: context.colors.onSurface,
                             ),
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 2),
                           Text(
                             description,
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 12.5,
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
@@ -371,7 +372,7 @@ class CustomSliderTile extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10.0),
                   child: Row(
@@ -384,7 +385,7 @@ class CustomSliderTile extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: CustomSlider(
+                        child: AnymeXSliderM3(
                           focusNode: FocusNode(
                               canRequestFocus: false, skipTraversal: true),
                           value: double.parse(sliderValue.toStringAsFixed(1)),
@@ -392,15 +393,15 @@ class CustomSliderTile extends StatelessWidget {
                           max: max,
                           min: min,
                           label: label ?? sliderValue.toStringAsFixed(1),
-                          onDragEnd: onChangedEnd,
-                          glowBlurMultiplier: 1,
-                          glowSpreadMultiplier: 1,
-                          divisions: divisions?.toInt() ?? (max * 10).toInt(),
-                          customValueIndicatorSize: RoundedSliderValueIndicator(
-                              context.colors,
-                              width: 40,
-                              height: 40,
-                              radius: 50),
+                          onChangeEnd: onChangedEnd,
+                          // glowBlurMultiplier: 1,
+                          // glowSpreadMultiplier: 1,
+                          // divisions: divisions?.toInt() ?? (max * 10).toInt(),
+                          // customValueIndicatorSize: RoundedSliderValueIndicator(
+                          //     context.colors,
+                          //     width: 40,
+                          //     height: 40,
+                          //     radius: 50),
                         ),
                       ),
                       const SizedBox(width: 10),

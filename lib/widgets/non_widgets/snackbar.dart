@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -71,10 +69,7 @@ void snackBar(
       message: message,
       title: title,
       backgroundColor: backgroundColor,
-      position: snackPosition ??
-          getResponsiveValue(context,
-              mobileValue: SnackPosition.BOTTOM,
-              desktopValue: SnackPosition.TOP),
+      position: snackPosition ?? SnackPosition.TOP,
       maxLines: maxLines,
       icon: icon,
       iconColor: iconColor,
@@ -311,7 +306,7 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
         child: Container(
           decoration: BoxDecoration(
             color: _bgColor,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(30),
             border: Border.all(
               color: cs.outline.withOpacity(0.1),
               width: 1,
@@ -319,23 +314,17 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.12),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: _accentColor.withOpacity(0.06),
-                blurRadius: 12,
+                blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(30),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildBody(cs),
-                if (widget.showDurationAnimation) _buildTimerBar(),
               ],
             ),
           ),
@@ -346,19 +335,16 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
 
   Widget _buildBody(ColorScheme cs) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (widget.icon != null) ...[
-            _IconBubble(
-              icon: widget.icon!,
-              color: _accentColor,
-              bgColor: _accentColor.withOpacity(0.12),
-            ),
-            const SizedBox(width: 12),
+            Icon(widget.icon, size: 20, color: _accentColor),
+            const SizedBox(width: 8),
           ],
-          Expanded(
+          Flexible(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -368,187 +354,29 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
                     widget.title!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: widget.theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    style: widget.theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                       color: cs.onSurface,
-                      height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 3),
                 ],
                 Text(
                   widget.message,
                   maxLines: widget.maxLines,
                   overflow: TextOverflow.ellipsis,
-                  style: widget.theme.textTheme.bodySmall?.copyWith(
+                  style: widget.theme.textTheme.labelMedium?.copyWith(
                     color: cs.onSurface
-                        .withOpacity(widget.title != null ? 0.65 : 0.85),
-                    height: 1.4,
+                        .withOpacity(widget.title != null ? 0.7 : 1.0),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-          if (widget.showCloseButton) ...[
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: _dismiss,
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 15,
-                  color: cs.onSurface.withOpacity(0.5),
-                ),
-              ),
-            ),
-          ] else ...[
-            const SizedBox(width: 10),
-            if (widget.showDurationAnimation)
-              AnimatedBuilder(
-                animation: _progressAnimation,
-                builder: (_, __) => _ArcTimer(
-                  progress: _progressAnimation.value,
-                  color: _accentColor,
-                  size: 26,
-                ),
-              ),
-          ],
         ],
       ),
     );
   }
-
-  Widget _buildTimerBar() {
-    return AnimatedBuilder(
-      animation: _progressAnimation,
-      builder: (_, __) {
-        return SizedBox(
-          height: 3,
-          child: Stack(
-            children: [
-              Container(color: _accentColor.withOpacity(0.08)),
-              FractionallySizedBox(
-                widthFactor: _progressAnimation.value,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        _accentColor.withOpacity(0.9),
-                        _accentColor.withOpacity(0.4),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _IconBubble extends StatelessWidget {
-  const _IconBubble({
-    required this.icon,
-    required this.color,
-    required this.bgColor,
-  });
-
-  final IconData icon;
-  final Color color;
-  final Color bgColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Icon(icon, size: 19, color: color),
-    );
-  }
-}
-
-class _ArcTimer extends StatelessWidget {
-  const _ArcTimer({
-    required this.progress,
-    required this.color,
-    required this.size,
-  });
-
-  final double progress;
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _ArcTimerPainter(progress: progress, color: color),
-      ),
-    );
-  }
-}
-
-class _ArcTimerPainter extends CustomPainter {
-  const _ArcTimerPainter({required this.progress, required this.color});
-
-  final double progress;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.width / 2) - 2.5;
-
-    final trackPaint = Paint()
-      ..color = color.withOpacity(0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-
-    final arcPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawCircle(center, radius, trackPaint);
-
-    if (progress > 0) {
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2,
-        2 * math.pi * progress,
-        false,
-        arcPaint,
-      );
-    }
-
-    final dotPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final dotAngle = -math.pi / 2 + (2 * math.pi * progress);
-    final dotX = center.dx + radius * math.cos(dotAngle);
-    final dotY = center.dy + radius * math.sin(dotAngle);
-    canvas.drawCircle(Offset(dotX, dotY), 2.8, dotPaint);
-  }
-
-  @override
-  bool shouldRepaint(_ArcTimerPainter old) => old.progress != progress;
 }
 
 void successSnackBar(

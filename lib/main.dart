@@ -47,10 +47,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:iconly/iconly.dart';
+import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:isar_community/isar.dart';
@@ -58,6 +57,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:anymex/utils/torrent/torrent_stream_resolver.dart';
 import 'package:provider/provider.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:window_manager/window_manager.dart';
 
 WebViewEnvironment? webViewEnvironment;
@@ -120,51 +120,104 @@ void initDeepLinkListener(List<String> args) async {
   );
 }
 
+Future<void> safeCall(FutureOr<void> Function() function,
+    {String? errorMessage}) async {
+  try {
+    await function();
+  } catch (e) {
+    if (errorMessage != null) {
+      Logger.e("$errorMessage: $e");
+    } else {
+      debugPrint("Error: $e");
+    }
+  }
+}
+
 void main(List<String> args) async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     if (Platform.isAndroid) {
-      FlutterDisplayMode.setHighRefreshRate().catchError((e) {
-        debugPrint("Error setting high refresh rate: $e");
-      });
+      safeCall(() => FlutterDisplayMode.setHighRefreshRate(),
+          errorMessage: 'Failed to set high refresh rate');
     }
-    ExternalFontLoader.loadAllFonts();
+
+    await safeCall(() async {
+      if (!Platform.isLinux) {
+        if (Platform.isWindows || Platform.isMacOS) {
+          webViewEnvironment = await WebViewEnvironment.create();
+        }
+        await InAppWebViewController.setWebContentsDebuggingEnabled(
+          !const bool.fromEnvironment('dart.vm.product'),
+        );
+      }
+    }, errorMessage: 'Failed to initialize WebViewEnvironment');
+
+    await safeCall(() => ExternalFontLoader.loadAllFonts(),
+        errorMessage: 'Failed to load external fonts');
 
     await Logger.init();
-    await dotenv.load(fileName: ".env");
+
+    try {
+      await dotenv.load(fileName: ".env");
+    } catch (e) {
+      dotenv.testLoad(fileInput: '');
+      Logger.e('Failed to load .env file, using empty mock env: $e');
+    }
 
     if (!Platform.isLinux) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      await safeCall(
+          () => Firebase.initializeApp(
+                options: DefaultFirebaseOptions.currentPlatform,
+              ),
+          errorMessage: 'Failed to initialize Firebase');
     }
 
     if (Platform.isWindows) {
-      ['dar', 'anymex', 'sugoireads', 'mangayomi', 'cloudstreamrepo', 'sora', 'tachiyomi', 'aniyomi']
-          .forEach(registerProtocolHandler);
+      await safeCall(() {
+        [
+          'dar',
+          'anymex',
+          'sugoireads',
+          'mangayomi',
+          'cloudstreamrepo',
+          'sora',
+          'tachiyomi',
+          'aniyomi'
+        ].forEach(registerProtocolHandler);
+      }, errorMessage: 'Failed to register protocol handlers');
     }
-    await Database().init();
+
+    await safeCall(() => Database().init(),
+        errorMessage: 'CRITICAL: Database initialization failed');
+
     HttpOverrides.global = MyHttpoverrides();
 
     _initializeGetxController();
-    initDeepLinkListener(args);
-    initializeDateFormatting();
-    MediaKit.ensureInitialized();
-    if (!Platform.isAndroid && !Platform.isIOS) {
-      await windowManager.ensureInitialized();
-      if (Platform.isWindows) {
+
+    await safeCall(() => initDeepLinkListener(args),
+        errorMessage: 'Failed to initialize deep link listener');
+
+    await safeCall(() => initializeDateFormatting(),
+        errorMessage: 'Failed to initialize date formatting');
+
+    await safeCall(() => MediaKit.ensureInitialized(),
+        errorMessage: 'Failed to initialize MediaKit');
+
+    await safeCall(() async {
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await windowManager.ensureInitialized();
         await AnymexTitleBar.initialize();
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarContrastEnforced: false,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: Brightness.dark,
+            statusBarColor: Colors.transparent,
+            statusBarBrightness: Brightness.dark));
       }
-    } else {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-          systemNavigationBarDividerColor: Colors.transparent,
-          systemNavigationBarContrastEnforced: false,
-          systemNavigationBarColor: Colors.transparent,
-          systemNavigationBarIconBrightness: Brightness.dark,
-          statusBarColor: Colors.transparent,
-          statusBarBrightness: Brightness.dark));
-    }
+    }, errorMessage: 'Failed to initialize window manager or system UI');
 
     FlutterError.onError = (FlutterErrorDetails details) async {
       FlutterError.presentError(details);
@@ -183,37 +236,47 @@ void main(List<String> args) async {
     Logger.e("STACK: $stackTrace");
   }, zoneSpecification: ZoneSpecification(
     print: (Zone self, ZoneDelegate parent, Zone zone, String line) {
-      Logger.i(line);
+      if (Logger.isInitialized) {
+        Logger.i(line);
+      } else {
+        parent.print(zone, line);
+      }
     },
   ));
 }
 
 void _initializeGetxController() async {
-  Get.put(Settings());
-  Get.put(OfflineStorageController());
-  Get.put(AnilistAuth());
-  Get.put(CommunityService());
-  Get.put(AnilistData());
-  Get.put(SimklService());
-  Get.put(MalService());
-  Get.put(DiscordRPCController());
-  if (!Get.isRegistered<SourceController>()) {
-    Get.put(SourceController());
-  }
-  Get.put(ServiceHandler());
-  Get.put(GreetingController());
-  Get.put(CommentumService());
-  Get.put(CommentPreloader());
-  Get.put(GistSyncController(), permanent: true);
-  Get.put(DownloadController(), permanent: true);
-  Get.lazyPut(() => CacheController());
-  await StorageManagerService().enforceImageCacheLimit();
+  await safeCall(() {
+    Get.put(Settings());
+    Get.put(OfflineStorageController());
+    Get.put(AnilistAuth());
+    Get.put(CommunityService());
+    Get.put(AnilistData());
+    Get.put(SimklService());
+    Get.put(MalService());
+    Get.put(DiscordRPCController());
+    if (!Get.isRegistered<SourceController>()) {
+      Get.put(SourceController());
+    }
+    Get.put(ServiceHandler());
+    Get.put(GreetingController());
+    Get.put(CommentumService());
+    Get.put(CommentPreloader());
+    Get.put(GistSyncController(), permanent: true);
+    Get.put(DownloadController(), permanent: true);
+    Get.lazyPut(() => CacheController());
+  }, errorMessage: 'Failed to register GetX controllers');
 
-  TorrentStreamResolver.initialize().then((_) {
-    debugPrint('Torrent engine initialized');
-  }).catchError((e) {
-    debugPrint('Torrent engine init failed (non-critical): $e');
-  });
+  await safeCall(() => StorageManagerService().enforceImageCacheLimit(),
+      errorMessage: 'Failed to enforce image cache limit');
+
+  await safeCall(() {
+    TorrentStreamResolver.initialize().then((_) {
+      debugPrint('Torrent engine initialized');
+    }).catchError((e) {
+      debugPrint('Torrent engine init failed (non-critical): $e');
+    });
+  }, errorMessage: 'Failed to initialize Torrent engine');
 }
 
 class MainApp extends StatefulWidget {
@@ -267,14 +330,6 @@ class _MainAppState extends State<MainApp> {
         .addListener(() => _isFullScreen = AnymexTitleBar.isFullScreen.value);
 
     focusNode = FocusNode();
-
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _showMainApp = true;
-        });
-      }
-    });
   }
 
   @override
@@ -302,7 +357,23 @@ class _MainAppState extends State<MainApp> {
             : theme.isLightMode
                 ? ThemeMode.light
                 : ThemeMode.dark,
-        home: _showMainApp ? const FilterScreen() : const AnymeXSplashScreen(),
+        home: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 500),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: _showMainApp
+              ? const FilterScreen(key: ValueKey('filter_screen'))
+              : AnymeXSplashScreen(
+                  key: const ValueKey('splash_screen'),
+                  onAnimationComplete: () {
+                    if (mounted) {
+                      setState(() {
+                        _showMainApp = true;
+                      });
+                    }
+                  },
+                ),
+        ),
         builder: (context, child) {
           if (PlatformDispatcher.instance.views.length > 1) {
             return child!;
@@ -423,7 +494,8 @@ class _FilterScreenState extends State<FilterScreen> {
                   ResponsiveNavBar(
                     isDesktop: true,
                     currentIndex: _selectedIndex,
-                    margin: const EdgeInsets.fromLTRB(20, 30, 15, 10),
+                    margin: const EdgeInsets.fromLTRB(20, 18, 15, 10),
+                    borderRadius: BorderRadius.circular(50),
                     items: [
                       NavItem(
                           unselectedIcon: IconlyBold.profile,
@@ -506,7 +578,7 @@ class _FilterScreenState extends State<FilterScreen> {
         bottomNavigationBar: ResponsiveNavBar(
           isDesktop: false,
           currentIndex: _mobileSelectedIndex,
-          margin: const EdgeInsets.symmetric(vertical: 40, horizontal: 40),
+          margin: const EdgeInsets.symmetric(vertical: 30, horizontal: 32),
           items: [
             NavItem(
               unselectedIcon: IconlyBold.home,

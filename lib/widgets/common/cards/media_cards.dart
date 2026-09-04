@@ -1,5 +1,4 @@
 import 'package:anymex/controllers/settings/methods.dart';
-import 'package:anymex/utils/extension_utils.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/common/cards/base_card.dart';
@@ -41,6 +40,7 @@ class SaikouCard extends CarouselCard {
   }
 
   Widget _buildCardImage(BuildContext context) {
+    final nextPill = buildNextEpisodePill(context);
     return Expanded(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12.multiplyRoundness()),
@@ -48,15 +48,26 @@ class SaikouCard extends CarouselCard {
           children: [
             Hero(
               tag: tag,
+              transitionOnUserGestures: true,
+              flightShuttleBuilder: AnymeXImage.heroFlightShuttleBuilder,
               child: AnymeXImage(
                 imageUrl: itemData.poster!,
                 radius: 12,
                 height: double.infinity,
                 width: double.infinity,
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
               ),
             ),
-            buildCardBadge(context, variant, type),
-            if (variant == DataVariant.library) buildProgress(context, variant)
+            buildCompactBadges(context, variant, type),
+            if (variant == DataVariant.library) buildProgress(context, variant),
+            if (nextPill != null)
+              Positioned(
+                bottom: 6,
+                left: 0,
+                right: 0,
+                child: Center(child: nextPill),
+              ),
           ],
         ),
       ),
@@ -114,6 +125,7 @@ class ModernCard extends CarouselCard {
 
   @override
   Widget build(BuildContext context) {
+    final nextPill = buildNextEpisodePill(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5),
       constraints: BoxConstraints(maxWidth: isDesktop(context) ? 150 : 108),
@@ -123,11 +135,15 @@ class ModernCard extends CarouselCard {
           children: [
             Hero(
               tag: tag,
+              transitionOnUserGestures: true,
+              flightShuttleBuilder: AnymeXImage.heroFlightShuttleBuilder,
               child: AnymeXImage(
                 imageUrl: itemData.poster!,
                 radius: 12,
                 height: double.infinity,
                 width: double.infinity,
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
               ),
             ),
             if (shouldShowTitle())
@@ -148,18 +164,35 @@ class ModernCard extends CarouselCard {
                     ),
                   ),
                   padding: const EdgeInsets.all(8),
-                  child: AnymexText(
-                    text: itemData.title ?? '?',
-                    maxLines: 2,
-                    size: isDesktop(context) ? 14 : 12,
-                    variant: TextVariant.semiBold,
-                    overflow: TextOverflow.ellipsis,
-                    color: Colors.white,
-                    isMarquee: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (nextPill != null) ...[
+                        nextPill,
+                        const SizedBox(height: 4),
+                      ],
+                      AnymexText(
+                        text: itemData.title ?? '?',
+                        maxLines: 2,
+                        size: isDesktop(context) ? 14 : 12,
+                        variant: TextVariant.semiBold,
+                        overflow: TextOverflow.ellipsis,
+                        color: Colors.white,
+                        isMarquee: false,
+                      ),
+                    ],
                   ),
                 ),
+              )
+            else if (nextPill != null)
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Center(child: nextPill),
               ),
-            buildCardBadgeV2(context, variant, type),
+            buildCompactBadges(context, variant, type),
           ],
         ),
       ),
@@ -182,6 +215,7 @@ class ExoticCard extends CarouselCard {
   @override
   Widget build(BuildContext context) {
     final primaryColor = context.colors.primary;
+    final nextPill = buildNextEpisodePill(context);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5),
@@ -214,15 +248,25 @@ class ExoticCard extends CarouselCard {
                   children: [
                     Hero(
                       tag: tag,
+                      transitionOnUserGestures: true,
+                      flightShuttleBuilder: AnymeXImage.heroFlightShuttleBuilder,
                       child: AnymeXImage(
                         imageUrl: itemData.poster!,
                         radius: 10,
                         height: double.infinity,
                         width: double.infinity,
+                        fadeInDuration: Duration.zero,
+                        fadeOutDuration: Duration.zero,
                       ),
                     ),
-                    if (variant == DataVariant.library)
-                      buildCardBadgeV2(context, variant, type)
+                    buildCompactBadges(context, variant, type),
+                    if (nextPill != null)
+                      Positioned(
+                        bottom: 6,
+                        left: 0,
+                        right: 0,
+                        child: Center(child: nextPill),
+                      ),
                   ],
                 ),
               ),
@@ -239,51 +283,6 @@ class ExoticCard extends CarouselCard {
                 variant: TextVariant.semiBold,
                 overflow: TextOverflow.ellipsis,
                 isMarquee: false,
-              ),
-            ),
-            10.height(),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 5),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: context.colors.primary,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (variant == DataVariant.library) ...[
-                    AnymexText(
-                      text: !type.isAnime ? 'Chapter ' : 'Episode ',
-                      size: 12,
-                      color: context.colors.onPrimary,
-                      variant: TextVariant.bold,
-                    ),
-                    const SizedBox(width: 4),
-                    AnymexText(
-                      text: itemData.source ?? '',
-                      color: context.colors.onPrimary,
-                      size: 12,
-                      variant: TextVariant.bold,
-                    ),
-                  ] else ...[
-                    Icon(
-                      getIconForVariant(
-                          itemData.extraData ?? '', variant, type),
-                      size: 16,
-                      color: context.colors.onPrimary,
-                    ),
-                    const SizedBox(width: 4),
-                    AnymexText(
-                      text: (itemData.extraData ?? '').replaceAll('_', ' '),
-                      color: context.colors.onPrimary,
-                      size: 12,
-                      variant: TextVariant.bold,
-                    ),
-                  ]
-                ],
               ),
             ),
           ],
@@ -308,6 +307,7 @@ class MinimalExoticCard extends CarouselCard {
   @override
   Widget build(BuildContext context) {
     final primaryColor = context.colors.primary;
+    final nextPill = buildNextEpisodePill(context);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5),
@@ -340,15 +340,18 @@ class MinimalExoticCard extends CarouselCard {
                   children: [
                     Hero(
                       tag: tag,
+                      transitionOnUserGestures: true,
+                      flightShuttleBuilder: AnymeXImage.heroFlightShuttleBuilder,
                       child: AnymeXImage(
                         imageUrl: itemData.poster!,
                         radius: 10,
                         height: double.infinity,
                         width: double.infinity,
+                        fadeInDuration: Duration.zero,
+                        fadeOutDuration: Duration.zero,
                       ),
                     ),
-                    if (variant == DataVariant.library)
-                      buildCardBadgeV2(context, variant, type),
+                    buildCompactBadges(context, variant, type),
                     if (shouldShowTitle())
                       Positioned(
                         left: 0,
@@ -367,73 +370,40 @@ class MinimalExoticCard extends CarouselCard {
                             ),
                           ),
                           padding: const EdgeInsets.all(8),
-                          child: AnymexText(
-                            text: itemData.title ?? '?',
-                            maxLines: 2,
-                            size: isDesktop(context) ? 14 : 12,
-                            variant: TextVariant.semiBold,
-                            overflow: TextOverflow.ellipsis,
-                            color: Colors.white,
-                            isMarquee: false,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (nextPill != null) ...[
+                                nextPill,
+                                const SizedBox(height: 4),
+                              ],
+                              AnymexText(
+                                text: itemData.title ?? '?',
+                                maxLines: 2,
+                                size: isDesktop(context) ? 14 : 12,
+                                variant: TextVariant.semiBold,
+                                overflow: TextOverflow.ellipsis,
+                                color: Colors.white,
+                                isMarquee: false,
+                              ),
+                            ],
                           ),
                         ),
+                      )
+                    else if (nextPill != null)
+                      Positioned(
+                        bottom: 8,
+                        left: 0,
+                        right: 0,
+                        child: Center(child: nextPill),
                       ),
                   ],
                 ),
               ),
             ),
           ),
-          if (shouldShowTitle()) ...[
-            10.height(),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 5),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: context.colors.primary,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (variant == DataVariant.library) ...[
-                    AnymexText(
-                      text: !type.isAnime ? 'Chapter ' : 'Episode ',
-                      size: 12,
-                      color: context.colors.onPrimary,
-                      variant: TextVariant.bold,
-                    ),
-                    const SizedBox(width: 4),
-                    AnymexText(
-                      text: itemData.source ?? '',
-                      color: context.colors.onPrimary,
-                      size: 12,
-                      variant: TextVariant.bold,
-                    ),
-                  ] else ...[
-                    Icon(
-                      getIconForVariant(
-                          variant == DataVariant.relation
-                              ? itemData.args!
-                              : itemData.extraData ?? '',
-                          variant,
-                          type),
-                      size: 16,
-                      color: context.colors.onPrimary,
-                    ),
-                    const SizedBox(width: 4),
-                    AnymexText(
-                      text: (itemData.extraData ?? '').replaceAll('_', ' '),
-                      color: context.colors.onPrimary,
-                      size: 12,
-                      variant: TextVariant.bold,
-                    ),
-                  ]
-                ],
-              ),
-            ),
-          ],
+
         ],
       ),
     );
@@ -454,6 +424,7 @@ class BlurCard extends CarouselCard {
 
   @override
   Widget build(BuildContext context) {
+    final nextPill = buildNextEpisodePill(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5),
       constraints: BoxConstraints(maxWidth: isDesktop(context) ? 150 : 108),
@@ -463,11 +434,15 @@ class BlurCard extends CarouselCard {
           children: [
             Hero(
               tag: tag,
+              transitionOnUserGestures: true,
+              flightShuttleBuilder: AnymeXImage.heroFlightShuttleBuilder,
               child: AnymeXImage(
                 imageUrl: itemData.poster!,
                 radius: 12,
                 height: double.infinity,
                 width: double.infinity,
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
               ),
             ),
             if (shouldShowTitle()) ...[
@@ -489,69 +464,37 @@ class BlurCard extends CarouselCard {
                 bottom: 0,
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                  child: AnymexText(
-                    text: itemData.title ?? '?',
-                    maxLines: 2,
-                    size: isDesktop(context) ? 14 : 12,
-                    variant: TextVariant.semiBold,
-                    overflow: TextOverflow.ellipsis,
-                    color: Colors.white,
-                    isMarquee: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (nextPill != null) ...[
+                        nextPill,
+                        const SizedBox(height: 4),
+                      ],
+                      AnymexText(
+                        text: itemData.title ?? '?',
+                        maxLines: 2,
+                        size: isDesktop(context) ? 14 : 12,
+                        variant: TextVariant.semiBold,
+                        overflow: TextOverflow.ellipsis,
+                        color: Colors.white,
+                        isMarquee: false,
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
-            buildCardBadge(context, variant, type),
+            ] else if (nextPill != null)
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Center(child: nextPill),
+              ),
+            buildCompactBadges(context, variant, type),
           ],
         ),
-      ),
-    );
-  }
-
-  @override
-  Widget buildCardBadge(
-      BuildContext context, DataVariant variant, ItemType type) {
-    final theme = Theme.of(context);
-
-    return Positioned(
-      top: 6,
-      left: 6,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Blur(
-                  blur: 5,
-                  blurColor: context.colors.surfaceContainer,
-                  colorOpacity: 0.4,
-                  child: Container()),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  getIconForVariant(itemData.extraData ?? '', variant, type),
-                  size: 16,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 4),
-                AnymexText(
-                  text: itemData.extraData ?? '',
-                  color: theme.colorScheme.primary,
-                  size: 12,
-                  variant: TextVariant.bold,
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

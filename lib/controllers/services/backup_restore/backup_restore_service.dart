@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:anymex/controllers/offline/offline_storage_controller.dart';
 import 'package:anymex/controllers/service_handler/service_handler.dart';
+import 'package:anymex/database/database.dart';
 import 'package:anymex/database/isar_models/custom_list.dart';
 import 'package:anymex/database/isar_models/key_value.dart';
 import 'package:anymex/database/isar_models/offline_media.dart';
@@ -31,6 +32,7 @@ class BackupRestoreService extends GetxController {
   var restoreProgress = 0.0.obs;
   var lastBackupPath = ''.obs;
   var statusMessage = ''.obs;
+  var backupProgressString = ''.obs;
 
   String _generateKey(String password) {
     final bytes = utf8.encode(password);
@@ -87,7 +89,7 @@ class BackupRestoreService extends GetxController {
           .where()
           .findAllSync()
           .where((e) {
-            final isAuth = e.key?.startsWith('AuthKeys_') ?? false;
+            final isAuth = e.key.startsWith('AuthKeys_');
             if (isAuth) return backupAuthTokens;
             return backupSettings;
           })
@@ -122,7 +124,7 @@ class BackupRestoreService extends GetxController {
             .toList() ??
         [];
 
-    await isar.writeTxn(() async {
+    await isar.safeWriteTxn(() async {
       if (merge) {
         for (var anime in animeList) {
           if (_storageController.getMediaById(anime.mediaId ?? '') == null) {
@@ -169,7 +171,7 @@ class BackupRestoreService extends GetxController {
               .toList() ??
           [];
 
-      await isar.writeTxn(() async {
+      await isar.safeWriteTxn(() async {
         await isar.customLists.putAll([
           ...animeCustomLists,
           ...mangaCustomLists,
@@ -179,7 +181,7 @@ class BackupRestoreService extends GetxController {
     }
 
     final settingsList = data['settings'] as List? ?? [];
-    await isar.writeTxn(() async {
+    await isar.safeWriteTxn(() async {
       for (var setting in settingsList) {
         final key = setting['key'] as String?;
         if (key == null) continue;

@@ -75,6 +75,7 @@ class LocalThumbnailService {
         );
 
         final bytes = Uint8List.fromList(thumbnailResult.data);
+        if (bytes == null || bytes.length < 1024) return null;
 
         if (bytes.isNotEmpty) {
           _memCache[filePath] = bytes;

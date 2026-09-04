@@ -12,11 +12,15 @@ class ThemedTopControls extends StatelessWidget {
     final settings = Get.find<Settings>();
     final controller = Get.find<PlayerController>();
 
-    return Obx(() {
-      final theme =
-          PlayerControlThemeRegistry.resolve(settings.playerControlThemeRx.value);
-      return theme.buildTopControls(context, controller);
-    });
+    return StreamBuilder<String>(
+      initialData: settings.playerControlThemeRx.value,
+      stream: settings.playerControlThemeRx.stream,
+      builder: (context, snapshot) {
+        final theme = PlayerControlThemeRegistry.resolve(
+            snapshot.data ?? 'default');
+        return theme.buildTopControls(context, controller);
+      },
+    );
   }
 }
 
@@ -28,11 +32,15 @@ class ThemedCenterControls extends StatelessWidget {
     final settings = Get.find<Settings>();
     final controller = Get.find<PlayerController>();
 
-    return Obx(() {
-      final theme =
-          PlayerControlThemeRegistry.resolve(settings.playerControlThemeRx.value);
-      return theme.buildCenterControls(context, controller);
-    });
+    return StreamBuilder<String>(
+      initialData: settings.playerControlThemeRx.value,
+      stream: settings.playerControlThemeRx.stream,
+      builder: (context, snapshot) {
+        final theme = PlayerControlThemeRegistry.resolve(
+            snapshot.data ?? 'default');
+        return theme.buildCenterControls(context, controller);
+      },
+    );
   }
 }
 
@@ -44,10 +52,14 @@ class ThemedBottomControls extends StatelessWidget {
     final settings = Get.find<Settings>();
     final controller = Get.find<PlayerController>();
 
-    return Obx(() {
-      final theme =
-          PlayerControlThemeRegistry.resolve(settings.playerControlThemeRx.value);
-      return theme.buildBottomControls(context, controller);
-    });
+    return StreamBuilder<String>(
+      initialData: settings.playerControlThemeRx.value,
+      stream: settings.playerControlThemeRx.stream,
+      builder: (context, snapshot) {
+        final theme = PlayerControlThemeRegistry.resolve(
+            snapshot.data ?? 'default');
+        return theme.buildBottomControls(context, controller);
+      },
+    );
   }
 }

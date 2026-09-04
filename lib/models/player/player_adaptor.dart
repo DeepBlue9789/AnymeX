@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:anymex/database/data_keys/keys.dart';
 
 class PlayerSettings {
@@ -31,10 +29,12 @@ class PlayerSettings {
   double subtitleOpacity;
   double subtitleBottomMargin;
   String subtitleOutlineType;
-  bool enableScreenshot;
   bool playerMenuAnimation;
   String hardwareDecoder;
   String preferredSubtitleLanguage;
+  String videoOutput;
+  bool enableGestureSafeZones;
+  double gestureSafeZoneMargin;
 
   PlayerSettings({
     this.speed = 1.0,
@@ -65,10 +65,12 @@ class PlayerSettings {
     this.subtitleBottomMargin = 10.0,
     this.subtitleOutlineType = "Outline",
     this.autoSkipFiller = false,
-    this.enableScreenshot = true,
     this.playerMenuAnimation = true,
     this.hardwareDecoder = 'hw',
     this.preferredSubtitleLanguage = 'none',
+    this.videoOutput = 'gpu',
+    this.enableGestureSafeZones = true,
+    this.gestureSafeZoneMargin = 40.0,
   });
 
   factory PlayerSettings.fromDB() {
@@ -134,13 +136,17 @@ class PlayerSettings {
           .get<String>(defaults.subtitleOutlineType),
       autoSkipFiller:
           PlayerSettingsKeys.autoSkipFiller.get<bool>(defaults.autoSkipFiller),
-      enableScreenshot: PlayerSettingsKeys.enableScreenshot
-          .get<bool>(defaults.enableScreenshot),
       playerMenuAnimation: PlayerSettingsKeys.playerMenuAnimation
           .get<bool>(defaults.playerMenuAnimation),
       hardwareDecoder: _readHardwareDecoder(),
       preferredSubtitleLanguage: PlayerSettingsKeys.preferredSubtitleLanguage
           .get<String>(defaults.preferredSubtitleLanguage),
+      videoOutput: PlayerSettingsKeys.videoOutput
+          .get<String>(defaults.videoOutput),
+      enableGestureSafeZones: PlayerSettingsKeys.enableGestureSafeZones
+          .get<bool>(defaults.enableGestureSafeZones),
+      gestureSafeZoneMargin: PlayerSettingsKeys.gestureSafeZoneMargin
+          .get<double>(defaults.gestureSafeZoneMargin),
     );
   }
 }
@@ -148,19 +154,18 @@ class PlayerSettings {
 String _normalizeHardwareDecoder(String value) {
   switch (value) {
     case 'hw+':
-      return Platform.isAndroid ? 'hw+' : 'hw';
     case 'hw':
     case 'sw':
       return value;
     default:
-      return Platform.isAndroid ? 'hw+' : 'hw';
+      return 'hw';
   }
 }
 
 String _readHardwareDecoder() {
   final stored = PlayerSettingsKeys.hardwareDecoder.get<String>('');
   if (stored.isEmpty) {
-    return Platform.isAndroid ? 'hw+' : 'hw';
+    return 'hw';
   }
   return _normalizeHardwareDecoder(stored);
 }

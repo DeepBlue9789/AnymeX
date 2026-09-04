@@ -25,6 +25,15 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher_string.dart';
 
+enum SplashAuthStatus {
+  idle,
+  authenticating,
+  loadingProfile,
+  completed,
+  error,
+  skipped,
+}
+
 class AnilistAuth extends GetxController {
   RxBool isLoggedIn = false.obs;
   Rx<Profile> profileData = Profile().obs;
@@ -40,6 +49,42 @@ class AnilistAuth extends GetxController {
   DateTime? _rateLimitUntil;
   AnilistUserSettings? cachedSettings;
   AnilistSettingsMetadata? cachedMetadata;
+
+  // Splash Loading Screen Reactive State
+  Rx<SplashAuthStatus> splashAuthStatus = SplashAuthStatus.idle.obs;
+  RxDouble splashProgress = 0.0.obs;
+  RxString splashStepMessage = 'Initializing...'.obs;
+  RxString splashErrorMessage = ''.obs;
+  RxBool isWatchingListLoading = false.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    // Synchronously restore cached profile info so splash screen has instant avatar & name
+    try {
+      final cachedName = AuthKeys.anilistCachedUsername.get<String?>();
+      final cachedAvatar = AuthKeys.anilistCachedAvatar.get<String?>();
+      final cachedJsonStr = AuthKeys.anilistCachedProfileJson.get<String?>();
+
+      if (cachedJsonStr != null && cachedJsonStr.isNotEmpty) {
+        final Map<String, dynamic> decoded = jsonDecode(cachedJsonStr);
+        final cachedProfile = Profile.fromJson(decoded);
+        if (cachedName != null && cachedName.isNotEmpty) cachedProfile.name = cachedName;
+        if (cachedAvatar != null && cachedAvatar.isNotEmpty) cachedProfile.avatar = cachedAvatar;
+        profileData.value = cachedProfile;
+      } else if (cachedName != null || cachedAvatar != null) {
+        profileData.value = Profile(
+          name: cachedName,
+          avatar: cachedAvatar,
+        );
+      }
+    } catch (e) {
+      Logger.e('Error restoring cached AniList profile: $e');
+    }
+  }
+
+  /// Guards against duplicate concurrent/sequential auto-login calls.
+  Future<void>? _autoLoginFuture;
 
   void _handle403(http.Response response) {
     dynamic errorJson;
@@ -110,21 +155,105 @@ class AnilistAuth extends GetxController {
     }
   }
 
-  Future<void> tryAutoLogin() async {
-    isLoggedIn.value = false;
-    final token = AuthKeys.authToken.get<String?>();
-    if (token != null) {
-      await fetchUserProfile();
-      await fetchUserAnimeList();
-      await fetchUserMangaList();
-      prefetchSettings();
+  Future<void> tryAutoLogin() {
+    _autoLoginFuture ??= _doAutoLogin();
+    return _autoLoginFuture!;
+  }
 
+  Future<void> _doAutoLogin() async {
+    await initAutoLoginSequence();
+  }
+
+  Future<bool> initAutoLoginSequence({bool isRetry = false}) async {
+    final token = AuthKeys.authToken.get<String?>();
+    if (token == null || token.isEmpty) {
+      splashAuthStatus.value = SplashAuthStatus.skipped;
+      splashProgress.value = 1.0;
+      splashStepMessage.value = 'Guest Mode';
+      isLoggedIn.value = false;
+      return true;
+    }
+
+    try {
+      splashErrorMessage.value = '';
+      splashAuthStatus.value = SplashAuthStatus.authenticating;
+      splashProgress.value = 0.25;
+      splashStepMessage.value = 'Verifying credentials...';
+
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      splashAuthStatus.value = SplashAuthStatus.loadingProfile;
+      splashProgress.value = 0.65;
+      splashStepMessage.value = 'Loading AniList profile...';
+
+      await fetchUserProfile(throwOnError: true);
+
+      splashProgress.value = 1.0;
+      splashStepMessage.value = 'Completed';
+      splashAuthStatus.value = SplashAuthStatus.completed;
+      isLoggedIn.value = true;
+
+      // Start watching list load in background without blocking splash completion
+      fetchWatchingListsInBackground();
+
+      return true;
+    } catch (e) {
+      splashAuthStatus.value = SplashAuthStatus.error;
+      splashErrorMessage.value = _formatAuthError(e);
+      Logger.e('AniList auto-login sequence failed: $e');
+      return false;
+    }
+  }
+
+  String _formatAuthError(dynamic error) {
+    final str = error.toString();
+    if (str.contains('SocketException') ||
+        str.contains('Failed host lookup') ||
+        str.contains('Network is unreachable') ||
+        str.contains('ClientException') ||
+        str.contains('Connection refused')) {
+      return 'Network connection failed. Please check your internet connection.';
+    } else if (str.contains('TimeoutException')) {
+      return 'Connection timed out. AniList servers may be busy.';
+    } else if (str.contains('401') || str.contains('Unauthorized')) {
+      return 'Session expired or token invalid. Please log in again.';
+    } else if (str.contains('403') || str.contains('Forbidden')) {
+      return 'Access forbidden (403). Cloudflare verification or IP restriction.';
+    } else if (str.contains('429')) {
+      return 'Rate limit exceeded. Please wait a few moments and retry.';
+    } else if (str.contains('500') || str.contains('502') || str.contains('503')) {
+      return 'AniList servers are currently down for maintenance.';
+    }
+    return str.replaceAll('Exception: ', '').trim();
+  }
+
+  void skipLogin() {
+    splashAuthStatus.value = SplashAuthStatus.skipped;
+    splashStepMessage.value = 'Skipped login';
+    isLoggedIn.value = false;
+  }
+
+  Future<void> retryLogin() async {
+    await initAutoLoginSequence(isRetry: true);
+  }
+
+  Future<void> fetchWatchingListsInBackground() async {
+    if (!isLoggedIn.value) return;
+    try {
+      isWatchingListLoading.value = true;
+      await Future.wait([
+        fetchUserAnimeList(),
+        fetchUserMangaList(),
+      ]);
+      prefetchSettings();
       try {
         final commentumService = Get.find<CommentumService>();
         await commentumService.getUserRole();
-      } catch (e) {
-        Logger.i('Error checking Commentum role during auto login: $e');
-      }
+      } catch (_) {}
+    } catch (e) {
+      Logger.e('Background watching list fetch error: $e');
+    } finally {
+      isWatchingListLoading.value = false;
     }
   }
 
@@ -306,7 +435,7 @@ class AnilistAuth extends GetxController {
     const url =
         'https://anilist.co/api/v2/oauth/authorize?client_id=35224&response_type=token';
 
-    await launchUrlString(url);
+    await launchUrlString(url, mode: LaunchMode.externalApplication);
 
     showDialog(
       context: context,
@@ -447,7 +576,7 @@ class AnilistAuth extends GetxController {
     }
   }
 
-  Future<void> fetchUserProfile() async {
+  Future<void> fetchUserProfile({bool throwOnError = false}) async {
     final token = AuthKeys.authToken.get<String?>();
 
     if (token == null) {
@@ -573,36 +702,57 @@ class AnilistAuth extends GetxController {
           'Accept': 'application/json',
         },
         body: json.encode({'query': query}),
-      );
+      ).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final viewerData = data['data']['Viewer'];
+        if (data['errors'] != null && (data['errors'] as List).isNotEmpty) {
+          final msg = data['errors'][0]['message'] ?? 'AniList GraphQL Error';
+          throw Exception(msg);
+        }
+        final viewerData = data['data']?['Viewer'];
+        if (viewerData == null) {
+          throw Exception('Viewer profile data is empty');
+        }
 
         final userProfile = Profile.fromJson(viewerData);
         userProfile.tokenExpiry = getExpiryFromToken(token);
         profileData.value = userProfile;
         isLoggedIn.value = true;
 
+        if (userProfile.name != null && userProfile.name!.isNotEmpty) {
+          AuthKeys.anilistCachedUsername.set(userProfile.name!);
+        }
+        if (userProfile.avatar != null && userProfile.avatar!.isNotEmpty) {
+          AuthKeys.anilistCachedAvatar.set(userProfile.avatar!);
+        }
+        try {
+          AuthKeys.anilistCachedProfileJson.set(jsonEncode(viewerData));
+        } catch (_) {}
+
         Logger.i(
             'User profile fetched: ${userProfile.name} (ID: ${userProfile.id})');
 
-        // fetchFollowersAndFollowing(userProfile.id ?? '');
         CommentsDatabase().login();
       } else if (response.statusCode == 403) {
         _handle403(response);
+      } else if (response.statusCode == 401) {
+        throw Exception('Unauthorized (Error 401): Session expired');
+      } else if (response.statusCode == 429) {
+        throw Exception('Rate limited (Error 429)');
       } else {
         Logger.i('Failed to load user profile: ${response.statusCode}');
-        throw Exception('Failed to load user profile');
+        throw Exception('Failed to load user profile (${response.statusCode})');
       }
     } catch (e) {
       Logger.i('Error fetching user profile: $e');
+      if (throwOnError) rethrow;
     }
   }
 
   void prefetchSettings() {
-    fetchUserSettings().then((s) => cachedSettings = s).catchError((_) {});
-    fetchSettingsMetadata().then((m) => cachedMetadata = m).catchError((_) {});
+    fetchUserSettings().then((s) => cachedSettings = s).catchError((_) => null);
+    fetchSettingsMetadata().then((m) => cachedMetadata = m).catchError((_) => null);
   }
 
   Future<AnilistUserSettings?> fetchUserSettings() async {
@@ -1065,7 +1215,7 @@ class AnilistAuth extends GetxController {
             startDate { year }
             title { userPreferred english romaji native }
             coverImage { large }
-            nextAiringEpisode { episode }
+            nextAiringEpisode { episode airingAt timeUntilAiring }
             mediaListEntry { id }
           }
         }
@@ -1925,10 +2075,12 @@ class AnilistAuth extends GetxController {
               id
             }
             format
+            status
             episodes
             nextAiringEpisode {
               episode
               airingAt
+              timeUntilAiring
             }
             averageScore
             type
@@ -2054,7 +2206,7 @@ class AnilistAuth extends GetxController {
         body: json.encode({
           'query': mutation,
           'variables': {
-            'deleteMediaListEntryId': listId,
+            'deleteMediaListEntryId': listId.split('*').first.toInt(),
           },
         }),
       );
@@ -2120,7 +2272,7 @@ class AnilistAuth extends GetxController {
       }
 
       final variables = <String, dynamic>{
-        'id': listId,
+        'id': listId.split('*').first.toInt(),
       };
 
       if (score != null) {
@@ -2175,10 +2327,15 @@ class AnilistAuth extends GetxController {
       }
 
       if (response.statusCode == 200) {
-        final newMedia = currentMedia.value
-          ..episodeCount = progress.toString()
-          ..watchingStatus = status
-          ..score = score.toString();
+        final body = json.decode(response.body);
+        if (body['errors'] != null) {
+          Logger.i('AniList update failed with GraphQL errors: ${body['errors']}');
+          return;
+        }
+        final newMedia = currentMedia.value;
+        if (progress != null) newMedia.episodeCount = progress.toString();
+        if (status != null) newMedia.watchingStatus = status;
+        if (score != null) newMedia.score = score.toString();
         currentMedia.value = newMedia;
         if (isAnime) {
           await fetchUserAnimeList();
@@ -2399,7 +2556,7 @@ class AnilistAuth extends GetxController {
         body: json.encode({
           'query': mutation,
           'variables': {
-            'mediaId': mangaId,
+            'mediaId': mangaId.split('*').first.toInt(),
             'status': status,
             'progress': progress,
             'score': score,
@@ -2482,20 +2639,30 @@ class AnilistAuth extends GetxController {
   void setCurrentMedia(String id, {bool isManga = false}) async {
     if (isManga) {
       final savedManga = offlineStorage.getMangaById(id);
-      final number = savedManga?.currentChapter?.number?.toInt() ?? 0;
-      currentMedia.value = mangaList.value.firstWhere((el) => el.id == id,
-          orElse: () => TrackedMedia(
-                episodeCount: number.toString(),
-                chapterCount: number.toString(),
-              ));
+      final localNumber = savedManga?.currentChapter?.number?.toInt() ?? 0;
+      final onlineMedia = mangaList.value.firstWhereOrNull((el) => el.id == id);
+      
+      if (onlineMedia != null) {
+        currentMedia.value = onlineMedia;
+      } else {
+        currentMedia.value = TrackedMedia(
+          episodeCount: localNumber.toString(),
+          chapterCount: localNumber.toString(),
+        );
+      }
     } else {
       final savedAnime = offlineStorage.getAnimeById(id);
-      final currentEpisode = savedAnime?.currentEpisode;
-      final number = currentEpisode == null ? 0 : currentEpisode.number.toInt();
-      currentMedia.value = animeList.value.firstWhere((el) => el.id == id,
-          orElse: () => TrackedMedia(
-              episodeCount: number.toString(),
-              chapterCount: number.toString()));
+      final localNumber = savedAnime?.currentEpisode?.number.toInt() ?? 0;
+      final onlineMedia = animeList.value.firstWhereOrNull((el) => el.id == id);
+      
+      if (onlineMedia != null) {
+        currentMedia.value = onlineMedia;
+      } else {
+        currentMedia.value = TrackedMedia(
+          episodeCount: localNumber.toString(),
+          chapterCount: localNumber.toString(),
+        );
+      }
     }
   }
 
@@ -2506,7 +2673,16 @@ class AnilistAuth extends GetxController {
 
   Future<void> logout() async {
     AuthKeys.authToken.delete();
+    AuthKeys.anilistCachedUsername.delete();
+    AuthKeys.anilistCachedAvatar.delete();
+    AuthKeys.anilistCachedProfileJson.delete();
     profileData.value = Profile();
     isLoggedIn.value = false;
+    animeList.clear();
+    mangaList.clear();
+    currentlyWatching.clear();
+    currentlyReading.clear();
+    splashAuthStatus.value = SplashAuthStatus.idle;
+    splashProgress.value = 0.0;
   }
 }

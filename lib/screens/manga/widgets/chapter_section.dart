@@ -9,6 +9,7 @@ import 'package:anymex/utils/language.dart';
 import 'package:anymex/utils/logger.dart';
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/common/no_source.dart';
+import 'package:anymex/widgets/common/cloudflare_webview.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_dropdown.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_image.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_progress.dart';
@@ -47,35 +48,6 @@ class ChapterSection extends StatelessWidget {
   });
 
   String _sourceDropdownValue(Source source) => source.id.toString();
-
-  Widget _buildListShell({
-    required BuildContext context,
-    required Widget child,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer.opaque(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: context.colors.outline.opaque(0.2, iReallyMeanIt: true),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context)
-                .colorScheme
-                .shadow
-                .opaque(0.08, iReallyMeanIt: true),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -342,8 +314,51 @@ class ChapterSection extends StatelessWidget {
       selectedItem: selectedItem,
       label: "SELECT SOURCE",
       icon: Icons.extension_rounded,
-      actionIcon: Icons.settings_outlined,
-      onActionPressed: () => openSourcePreferences(Get.context!),
+      actions: selectedItem == null || sourceController.installedMangaExtensions.isEmpty ? null : [
+        Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                final activeSource = sourceController.activeMangaSource.value;
+                if (activeSource != null && activeSource.baseUrl != null) {
+                  Get.context!.openCloudflareBypass(activeSource.baseUrl!);
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: Icon(
+                  Icons.security_rounded,
+                  size: 20,
+                  color: Theme.of(Get.context!).colorScheme.primary.opaque(0.8),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => openSourcePreferences(Get.context!),
+              child: Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: Icon(
+                  Icons.settings_outlined,
+                  size: 20,
+                  color: Theme.of(Get.context!).colorScheme.primary.opaque(0.8),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
       onChanged: (DropdownItem item) async {
         chapterList.value = [];
         try {
@@ -365,7 +380,7 @@ class ChapterSection extends StatelessWidget {
 
     final newSubSource =
         activeSource.langs!.firstWhere((s) => s.id.toString() == value);
-    sourceController.setActiveSource(newSubSource);
+    sourceController.setActiveSource(newSubSource, mediaId: anilistData.id.toString());
 
     chapterList.value = [];
     try {

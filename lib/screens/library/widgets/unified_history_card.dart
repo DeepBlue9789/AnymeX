@@ -1,10 +1,7 @@
-// ignore_for_file: deprecated_member_use
-
 import 'package:anymex/controllers/settings/methods.dart';
 import 'package:anymex/screens/library/widgets/history_model.dart';
 import 'package:anymex/widgets/custom_widgets/custom_expansion_tile.dart';
 import 'package:anymex/widgets/custom_widgets/custom_text.dart';
-import 'package:anymex/widgets/header.dart';
 import 'package:anymex/widgets/custom_widgets/anymex_image.dart';
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
@@ -14,8 +11,15 @@ import 'package:anymex/utils/theme_extensions.dart';
 
 class UnifiedHistoryCard extends StatelessWidget {
   final HistoryModel media;
+  final VoidCallback? onRemove;
+  final VoidCallback? onLongPress;
 
-  const UnifiedHistoryCard({super.key, required this.media});
+  const UnifiedHistoryCard({
+    super.key,
+    required this.media,
+    this.onRemove,
+    this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -37,12 +41,13 @@ class UnifiedHistoryCard extends StatelessWidget {
       child: AnymexOnTap(
         onTap: media.onTap,
         child: SizedBox(
-          height: getResponsiveSize(context, mobileSize: 140, desktopSize: 180),
+          height: getResponsiveSize(context, mobileSize: 100, desktopSize: 130),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Stack(children: [
               Positioned.fill(
                 child: AnymeXImage(
+                  key: ValueKey(media.cover),
                   imageUrl: media.cover,
                   radius: 0,
                   width: double.infinity,
@@ -69,7 +74,7 @@ class UnifiedHistoryCard extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: getResponsiveSize(context,
-                        mobileSize: 100, desktopSize: 130),
+                        mobileSize: 70, desktopSize: 95),
                     height: double.infinity,
                     child: ClipRRect(
                       borderRadius: BorderRadius.only(
@@ -207,7 +212,7 @@ class UnifiedHistoryCardV3 extends StatelessWidget {
               child: AnymeXImage(
                 imageUrl: media.cover.isEmpty ? media.poster : media.cover,
                 width: double.infinity,
-                height: 160,
+                height: 110,
                 radius: 0,
               ),
             ),
@@ -259,6 +264,7 @@ class UnifiedHistoryCardV3 extends StatelessWidget {
                     maxLines: 1,
                     variant: TextVariant.bold,
                     overflow: TextOverflow.ellipsis,
+                    isMarquee: true,
                   ),
                   const SizedBox(height: 4),
                   if (media.title != null && media.title != media.progressTitle)
@@ -269,6 +275,7 @@ class UnifiedHistoryCardV3 extends StatelessWidget {
                       variant: TextVariant.regular,
                       color: colorScheme.onSurface.opaque(0.7),
                       overflow: TextOverflow.ellipsis,
+                      isMarquee: true,
                     ),
                   const SizedBox(height: 12),
                   Row(
@@ -325,13 +332,13 @@ class UnifiedHistoryCardV2 extends StatelessWidget {
       child: AnymexOnTap(
         onTap: media.onTap,
         child: SizedBox(
-          height: getResponsiveSize(context, mobileSize: 140, desktopSize: 180),
+          height: getResponsiveSize(context, mobileSize: 100, desktopSize: 130),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
                 width: getResponsiveSize(context,
-                    mobileSize: 100, desktopSize: 130),
+                    mobileSize: 70, desktopSize: 95),
                 height: double.infinity,
                 child: ClipRRect(
                   borderRadius: BorderRadius.only(
@@ -339,11 +346,11 @@ class UnifiedHistoryCardV2 extends StatelessWidget {
                     bottomLeft: Radius.circular(16.multiplyRadius()),
                   ),
                   child: AnymeXImage(
-                    imageUrl: media.poster,
+                    imageUrl: media.poster.isNotEmpty ? media.poster : media.cover,
                     width: double.infinity,
                     height: double.infinity,
                     radius: 0,
-                    errorImage: media.poster,
+                    errorImage: media.media?.poster ?? media.poster,
                   ),
                 ),
               ),

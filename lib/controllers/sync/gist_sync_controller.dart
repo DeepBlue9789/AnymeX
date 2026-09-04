@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:anymex/controllers/sync/gist_sync_service.dart';
+import 'package:anymex/controllers/sync/pocketbase_sync_service.dart';
+import 'package:anymex/controllers/offline/offline_storage_controller.dart';
+import 'package:anymex/database/isar_models/offline_media.dart';
 import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/database/isar_models/chapter.dart';
 import 'package:anymex/database/isar_models/episode.dart';
@@ -46,7 +49,18 @@ class GistSyncController extends GetxController {
   final githubDisplayName = RxnString();
   final githubAvatarUrl = RxnString();
   final githubProfileUrl = RxnString();
-  RxBool get isConnected => isLoggedIn;
+
+  // PocketBase & Provider state
+  final syncProvider = 'github'.obs; // 'github', 'pocketbase', 'none'
+  final pocketbaseUrl = ''.obs;
+  final pocketbaseEmail = ''.obs;
+  final pocketbasePassword = ''.obs;
+  final pocketbaseToken = ''.obs;
+  final pocketbaseUserId = ''.obs;
+  final isPocketbaseConnected = false.obs;
+  final pocketbaseAutoSyncHistory = true.obs;
+
+  RxBool get isConnected => syncProvider.value == 'pocketbase' ? isPocketbaseConnected : isLoggedIn;
   final _service = GistSyncService();
   int _activeSyncOps = 0;
 
@@ -110,6 +124,23 @@ class GistSyncController extends GetxController {
 
   Future<void> _restoreSession() async {
     try {
+      syncProvider.value = SyncKeys.syncProvider.get<String>('github');
+      pocketbaseUrl.value = SyncKeys.pocketbaseUrl.get<String>('');
+      pocketbaseEmail.value = SyncKeys.pocketbaseEmail.get<String>('');
+      pocketbasePassword.value = SyncKeys.pocketbasePassword.get<String>('');
+      pocketbaseToken.value = SyncKeys.pocketbaseToken.get<String>('');
+      pocketbaseUserId.value = SyncKeys.pocketbaseUserId.get<String>('');
+      pocketbaseAutoSyncHistory.value =
+          SyncKeys.pocketbaseAutoSyncHistory.get<bool>(true);
+
+      if (pocketbaseUrl.value.isNotEmpty &&
+          (pocketbaseToken.value.isNotEmpty || pocketbasePassword.value.isNotEmpty)) {
+        isPocketbaseConnected.value = true;
+        if (syncProvider.value == 'pocketbase' && pocketbaseAutoSyncHistory.value) {
+          unawaited(pullLocalHistoryNow());
+        }
+      }
+
       final token = SyncKeys.gistGithubToken.get<String>('');
       final username = SyncKeys.gistGithubUsername.get<String>('');
       autoDeleteCompletedOnExit.value = SyncKeys.gistAutoDeleteCompleted
@@ -125,6 +156,201 @@ class GistSyncController extends GetxController {
       }
     } catch (e) {
       Logger.i('[GistSync] _restoreSession: $e');
+    }
+  }
+
+  void setSyncProvider(String provider) {
+    syncProvider.value = provider;
+    SyncKeys.syncProvider.set(provider);
+    if (provider == 'pocketbase' && isPocketbaseConnected.value && pocketbaseAutoSyncHistory.value) {
+      unawaited(pullLocalHistoryNow());
+    }
+  }
+
+  Future<bool> loginPocketbase({
+    String? url,
+    String? email,
+    String? password,
+  }) async {
+    final targetUrl = url ?? pocketbaseUrl.value;
+    final targetEmail = email ?? pocketbaseEmail.value;
+    final targetPass = password ?? pocketbasePassword.value;
+
+    if (targetUrl.trim().isEmpty ||
+        targetEmail.trim().isEmpty ||
+        targetPass.trim().isEmpty) {
+      errorSnackBar('Please enter Server URL, Email/Username, and Password.');
+      return false;
+    }
+
+    isAuthenticating.value = true;
+    try {
+      final res = await PocketBaseSyncService().authenticate(
+        baseUrl: targetUrl,
+        identity: targetEmail,
+        password: targetPass,
+      );
+
+      if (res.success) {
+        pocketbaseUrl.value = targetUrl;
+        pocketbaseEmail.value = targetEmail;
+        pocketbasePassword.value = targetPass;
+        pocketbaseToken.value = res.token;
+        pocketbaseUserId.value = res.userId;
+        isPocketbaseConnected.value = true;
+
+        SyncKeys.pocketbaseUrl.set(targetUrl);
+        SyncKeys.pocketbaseEmail.set(targetEmail);
+        SyncKeys.pocketbasePassword.set(targetPass);
+        SyncKeys.pocketbaseToken.set(res.token);
+        SyncKeys.pocketbaseUserId.set(res.userId);
+
+        successSnackBar('Connected to PocketBase as ${res.email}!');
+        if (pocketbaseAutoSyncHistory.value) {
+          unawaited(pullLocalHistoryNow());
+        }
+        return true;
+      } else {
+        errorSnackBar('PocketBase Connection Failed: ${res.message}');
+        return false;
+      }
+    } finally {
+      isAuthenticating.value = false;
+    }
+  }
+
+  Future<PocketBaseTestResult> testPocketbaseConnection() async {
+    final targetUrl = pocketbaseUrl.value;
+    final targetEmail = pocketbaseEmail.value;
+    final targetPass = pocketbasePassword.value;
+
+    if (targetUrl.trim().isEmpty ||
+        targetEmail.trim().isEmpty ||
+        targetPass.trim().isEmpty) {
+      const res = PocketBaseTestResult(
+        success: false,
+        message: 'Missing credentials. Enter URL, Email, and Password.',
+      );
+      errorSnackBar(res.message);
+      return res;
+    }
+
+    final res = await PocketBaseSyncService().testConnection(
+      baseUrl: targetUrl,
+      identity: targetEmail,
+      password: targetPass,
+    );
+
+    if (res.success) {
+      successSnackBar('PocketBase setup verified! Collections ready.');
+    } else {
+      errorSnackBar('PocketBase test failed: ${res.message}');
+    }
+    return res;
+  }
+
+  Future<void> pushLocalHistoryItem(OfflineMedia media, Episode episode) async {
+    if (syncProvider.value != 'pocketbase' || !isPocketbaseConnected.value) {
+      return;
+    }
+
+    final poster = media.poster ?? media.cover ?? '';
+    final cover = media.cover ?? media.poster ?? '';
+    final thumbUrl = episode.thumbnail ?? '';
+
+    String epListThumb = '';
+    if (media.episodes != null) {
+      final matched = media.episodes!.firstWhereOrNull((e) => e.number == episode.number);
+      if (matched?.thumbnail != null &&
+          (matched!.thumbnail!.startsWith('http://') || matched.thumbnail!.startsWith('https://')) &&
+          matched.thumbnail != poster &&
+          matched.thumbnail != cover) {
+        epListThumb = matched.thumbnail!;
+      }
+    }
+
+    final validThumb = (thumbUrl.startsWith('http://') || thumbUrl.startsWith('https://')) &&
+            thumbUrl != poster &&
+            thumbUrl != cover
+        ? thumbUrl
+        : epListThumb;
+
+    final mediaIdStr = media.mediaId ?? media.id.toString();
+    final stickySrc = DynamicKeys.stickySource.get<String?>(mediaIdStr);
+    final prefServer = DynamicKeys.preferredServer.get<String?>(mediaIdStr);
+    final prefSub = DynamicKeys.preferredSubtitle.get<String?>(mediaIdStr);
+
+    final historyData = {
+      'media_id': mediaIdStr,
+      'title': media.name,
+      'cover': cover,
+      'poster': poster,
+      'episode_number': episode.number,
+      'episode_title': episode.title ?? '',
+      'timestamp_ms': episode.timeStampInMilliseconds ?? 0,
+      'duration_ms': episode.durationInMilliseconds ?? 0,
+      'last_watched_time': episode.lastWatchedTime ?? DateTime.now().millisecondsSinceEpoch,
+      'source': stickySrc ?? episode.source ?? '',
+      'server': prefServer ?? '',
+      'sub_language': prefSub ?? '',
+      'media_type': 'anime',
+      'thumbnail': validThumb,
+      'episode_link': episode.link ?? '',
+    };
+
+    await PocketBaseSyncService().pushLocalHistory(
+      baseUrl: pocketbaseUrl.value,
+      token: pocketbaseToken.value,
+      userId: pocketbaseUserId.value,
+      historyData: historyData,
+    );
+  }
+
+  Future<void> removeHistoryItem(String mediaId) async {
+    if (mediaId.isEmpty) return;
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      unawaited(PocketBaseSyncService().deleteHistoryItem(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        mediaId: mediaId,
+      ));
+    } else if (isLoggedIn.value && syncEnabled.value) {
+      unawaited(_service.remove(mediaId));
+    }
+  }
+
+  Future<void> pullLocalHistoryNow() async {
+    if (syncProvider.value != 'pocketbase' || !isPocketbaseConnected.value) {
+      return;
+    }
+
+    final items = await PocketBaseSyncService().fetchLocalHistory(
+      baseUrl: pocketbaseUrl.value,
+      token: pocketbaseToken.value,
+      userId: pocketbaseUserId.value,
+    );
+
+    if (items == null) return;
+
+    if (Get.isRegistered<OfflineStorageController>()) {
+      final offlineStorage = Get.find<OfflineStorageController>();
+      await offlineStorage.syncHistoryFromRemote(items);
+      Logger.i('[PocketBase] Synced ${items.length} history items.');
+    }
+  }
+
+  Future<void> clearPocketbaseData() async {
+    if (!isPocketbaseConnected.value) return;
+    final success = await PocketBaseSyncService().clearRemoteData(
+      baseUrl: pocketbaseUrl.value,
+      token: pocketbaseToken.value,
+      userId: pocketbaseUserId.value,
+    );
+    if (success) {
+      successSnackBar('Cleared remote PocketBase records.');
+    } else {
+      errorSnackBar('Failed to clear PocketBase records.');
     }
   }
 
@@ -554,6 +780,28 @@ class GistSyncController extends GetxController {
     required Episode episode,
     required bool isCompleted,
   }) async {
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      final resolvedMalId = await _resolveMalId(mediaId, malId: malId, isManga: false);
+      final updatedAt = episode.lastWatchedTime ?? DateTime.now().millisecondsSinceEpoch;
+      unawaited(PocketBaseSyncService().pushGistEntry(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        entry: GistProgressEntry(
+          mediaId: mediaId,
+          malId: resolvedMalId,
+          mediaType: 'anime',
+          serviceType: serviceType,
+          episodeNumber: episode.number,
+          timestampMs: episode.timeStampInMilliseconds,
+          durationMs: episode.durationInMilliseconds,
+          updatedAt: updatedAt,
+        ),
+        isCompleted: isCompleted,
+      ));
+      return;
+    }
+
     if (!_canSync || mediaId.isEmpty) return;
 
     final stopwatch = Stopwatch()..start();
@@ -646,6 +894,30 @@ class GistSyncController extends GetxController {
     required Chapter chapter,
     required bool isCompleted,
   }) async {
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      final resolvedMalId = await _resolveMalId(mediaId, malId: malId, isManga: mediaType != 'anime');
+      final updatedAt = chapter.lastReadTime ?? DateTime.now().millisecondsSinceEpoch;
+      unawaited(PocketBaseSyncService().pushGistEntry(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        entry: GistProgressEntry(
+          mediaId: mediaId,
+          malId: resolvedMalId,
+          mediaType: mediaType,
+          serviceType: serviceType,
+          chapterNumber: chapter.number,
+          pageNumber: chapter.pageNumber,
+          totalPages: chapter.totalPages,
+          scrollOffset: chapter.currentOffset,
+          maxScrollOffset: chapter.maxOffset,
+          updatedAt: updatedAt,
+        ),
+        isCompleted: isCompleted,
+      ));
+      return;
+    }
+
     if (!_canSync || mediaId.isEmpty) return;
 
     final stopwatch = Stopwatch()..start();
@@ -742,6 +1014,27 @@ class GistSyncController extends GetxController {
     required Episode episode,
     bool isCompleted = false,
   }) {
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      final updatedAt = episode.lastWatchedTime ?? DateTime.now().millisecondsSinceEpoch;
+      unawaited(PocketBaseSyncService().pushGistEntry(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        entry: GistProgressEntry(
+          mediaId: mediaId,
+          malId: malId,
+          mediaType: 'anime',
+          serviceType: serviceType,
+          episodeNumber: episode.number,
+          timestampMs: episode.timeStampInMilliseconds,
+          durationMs: episode.durationInMilliseconds,
+          updatedAt: updatedAt,
+        ),
+        isCompleted: isCompleted,
+      ));
+      return;
+    }
+
     if (!_canSync || mediaId.isEmpty) return;
 
     unawaited(_doUpload(() async {
@@ -781,6 +1074,29 @@ class GistSyncController extends GetxController {
     required Chapter chapter,
     bool isCompleted = false,
   }) {
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      final updatedAt = chapter.lastReadTime ?? DateTime.now().millisecondsSinceEpoch;
+      unawaited(PocketBaseSyncService().pushGistEntry(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        entry: GistProgressEntry(
+          mediaId: mediaId,
+          malId: malId,
+          mediaType: mediaType,
+          serviceType: serviceType,
+          chapterNumber: chapter.number,
+          pageNumber: chapter.pageNumber,
+          totalPages: chapter.totalPages,
+          scrollOffset: chapter.currentOffset,
+          maxScrollOffset: chapter.maxOffset,
+          updatedAt: updatedAt,
+        ),
+        isCompleted: isCompleted,
+      ));
+      return;
+    }
+
     if (!_canSync || mediaId.isEmpty) return;
 
     unawaited(_doUpload(() async {
@@ -818,6 +1134,22 @@ class GistSyncController extends GetxController {
   }
 
   void removeEntry(String mediaId, {String? malId}) {
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      unawaited(PocketBaseSyncService().pushGistEntry(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        entry: GistProgressEntry(
+          mediaId: mediaId,
+          malId: malId,
+          mediaType: 'anime',
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+        isCompleted: true,
+      ));
+      return;
+    }
+
     if (!_canSync || mediaId.isEmpty) return;
     unawaited(_doUpload(() async {
       final result = await _service.remove(mediaId, malId: malId);
@@ -833,6 +1165,20 @@ class GistSyncController extends GetxController {
     required String episodeNumber,
     required int localTimestampMs,
   }) async {
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      final entry = await PocketBaseSyncService().fetchGistEntry(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        mediaId: mediaId,
+      );
+      if (entry != null && entry.mediaType == 'anime' && entry.episodeNumber == episodeNumber) {
+        final cloud = entry.timestampMs ?? 0;
+        if (cloud > localTimestampMs) return cloud;
+      }
+      return null;
+    }
+
     if (!_canSync) return null;
     try {
       final entry = await _service.fetch(mediaId, malId: malId);
@@ -857,6 +1203,19 @@ class GistSyncController extends GetxController {
     required double chapterNumber,
     required int localUpdatedAt,
   }) async {
+    if (syncProvider.value == 'pocketbase' && isPocketbaseConnected.value) {
+      final entry = await PocketBaseSyncService().fetchGistEntry(
+        baseUrl: pocketbaseUrl.value,
+        token: pocketbaseToken.value,
+        userId: pocketbaseUserId.value,
+        mediaId: mediaId,
+      );
+      if (entry != null && entry.mediaType == mediaType && entry.chapterNumber == chapterNumber) {
+        if (entry.updatedAt > localUpdatedAt) return entry;
+      }
+      return null;
+    }
+
     if (!_canSync) return null;
     try {
       final entry = await _service.fetch(mediaId, malId: malId);

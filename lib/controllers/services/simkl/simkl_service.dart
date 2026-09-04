@@ -3,6 +3,8 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:anymex/controllers/offline/offline_storage_controller.dart';
+import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/controllers/cacher/cache_controller.dart';
 import 'package:anymex/controllers/service_handler/params.dart';
 import 'package:anymex/controllers/service_handler/service_handler.dart';
@@ -212,84 +214,46 @@ class SimklService extends GetxController
   RxList<Widget> homeWidgets(BuildContext context) {
     return [
       if (isLoggedIn.value)
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final isDesktop = constraints.maxWidth > 600;
-            final buttonHeight = !isDesktop ? 70.0 : 90.0;
-            final itemWidth = isDesktop
-                ? math.min(300.0, (constraints.maxWidth - 15) / 2)
-                : (constraints.maxWidth / 2) - 20;
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ImageButton(
-                  width: itemWidth,
-                  height: buttonHeight,
-                  buttonText: "MOVIES LIST",
-                  backgroundImage: trendingMovies
-                          .firstWhere(
-                            (e) => e.cover != null,
-                            orElse: () => Media(
-                                cover: '', serviceType: ServicesType.simkl),
-                          )
-                          .cover ??
-                      '',
-                  borderRadius: 16.multiplyRadius(),
-                  onPressed: () {
-                    navigate(() => AnimeList(
-                          title: "Movies",
-                          data: animeList.value,
-                        ));
-                  },
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: ActionChip(
+                  label: const Text('Movies', style: TextStyle(fontFamily: 'Poppins-SemiBold')),
+                  avatar: const Icon(Icons.movie_rounded, size: 16),
+                  onPressed: () => navigate(() => AnimeList(title: "Movies", data: animeList.value)),
+                  side: BorderSide.none,
+                  backgroundColor: context.colors.primaryContainer.opaque(0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.multiplyRadius())),
                 ),
-                const SizedBox(width: 15),
-                ImageButton(
-                  width: itemWidth,
-                  height: buttonHeight,
-                  buttonText: "SERIES LIST",
-                  borderRadius: 16.multiplyRadius(),
-                  backgroundImage: trendingSeries
-                          .firstWhere(
-                            (e) => e.cover != null,
-                            orElse: () => Media(
-                                cover: '', serviceType: ServicesType.simkl),
-                          )
-                          .cover ??
-                      '',
-                  onPressed: () {
-                    navigate(() => AnimeList(
-                          title: "Shows",
-                          data: mangaList.value,
-                        ));
-                  },
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ActionChip(
+                  label: const Text('Series', style: TextStyle(fontFamily: 'Poppins-SemiBold')),
+                  avatar: const Icon(Icons.tv_rounded, size: 16),
+                  onPressed: () => navigate(() => AnimeList(title: "Shows", data: mangaList.value)),
+                  side: BorderSide.none,
+                  backgroundColor: context.colors.primaryContainer.opaque(0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.multiplyRadius())),
                 ),
-              ],
-            );
-          },
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ActionChip(
+                  label: const Text('Calendar', style: TextStyle(fontFamily: 'Poppins-SemiBold')),
+                  avatar: const Icon(Icons.calendar_month_rounded, size: 16),
+                  onPressed: () => navigate(() => const Calendar()),
+                  side: BorderSide.none,
+                  backgroundColor: context.colors.primaryContainer.opaque(0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.multiplyRadius())),
+                ),
+              ),
+            ],
+          ),
         ),
-      const SizedBox(height: 15),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth > 600;
-          final buttonHeight = !isDesktop ? 70.0 : 90.0;
-          final buttonWidth =
-              isDesktop ? 300.0 : math.max(120.0, constraints.maxWidth - 40);
-          return Center(
-            child: ImageButton(
-              width: buttonWidth,
-              height: buttonHeight,
-              buttonText: "CALENDAR",
-              borderRadius: 16.multiplyRadius(),
-              backgroundImage: trendingMovies.isNotEmpty
-                  ? trendingMovies[0].cover ?? ''
-                  : '',
-              onPressed: () {
-                navigate(() => const Calendar());
-              },
-            ),
-          );
-        },
-      ),
       const SizedBox(height: 25),
       if (isLoggedIn.value) ...[
         buildSection("Planned Movies", continueWatchingMovies.value,
