@@ -1,25 +1,23 @@
 import 'package:anymex/controllers/settings/methods.dart';
 import 'package:anymex/screens/library/widgets/history_model.dart';
 import 'package:anymex/utils/theme_extensions.dart';
-import 'package:anymex/widgets/custom_widgets/anymex_image.dart';
-import 'package:anymex/widgets/custom_widgets/custom_expansion_tile.dart';
-import 'package:anymex/widgets/custom_widgets/custom_text.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_image.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_expansion_tile.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
 import 'package:flutter/material.dart';
 
 class ContinueWatchingCard extends StatelessWidget {
   final HistoryModel media;
   final VoidCallback? onRemove;
-  final VoidCallback? onLongPress;
 
-  const ContinueWatchingCard({super.key, required this.media, this.onRemove, this.onLongPress});
+  const ContinueWatchingCard({super.key, required this.media, this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colors;
-    final imgUrl = media.cover.isEmpty ? media.poster : media.cover;
 
-    return AnymexCard(
+    return AnymeXCard(
       shape: RoundedRectangleBorder(
         side: BorderSide(
           color: colorScheme.outline.opaque(0.1, iReallyMeanIt: true),
@@ -31,7 +29,6 @@ class ContinueWatchingCard extends StatelessWidget {
       color: colorScheme.surfaceContainer.opaque(0.4),
       child: AnymexOnTap(
         onTap: media.onTap,
-        onLongPress: onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -45,8 +42,8 @@ class ContinueWatchingCard extends StatelessWidget {
                       topRight: Radius.circular(12.multiplyRadius()),
                     ),
                     child: AnymeXImage(
-                      key: ValueKey(imgUrl),
-                      imageUrl: imgUrl,
+                      imageUrl:
+                          media.cover.isEmpty ? media.poster : media.cover,
                       width: double.infinity,
                       radius: 0,
                     ),
@@ -72,6 +69,32 @@ class ContinueWatchingCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: context.colors.primary
+                          .opaque(0.8, iReallyMeanIt: true),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white12, width: 0.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.timelapse_rounded,
+                            size: 10, color: context.colors.onPrimary),
+                        const SizedBox(width: 4),
+                        AnymeXText(media.date ?? '',
+                            size: 10,
+                            variant: TextVariant.bold,
+                            color: context.colors.onPrimary),
+                      ],
+                    ),
+                  ),
+                ),
                 if (onRemove != null)
                   Positioned(
                     top: 6,
@@ -92,46 +115,53 @@ class ContinueWatchingCard extends StatelessWidget {
                       ),
                     ),
                   ),
-
+                Positioned.fill(
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: context.colors.primary
+                            .opaque(0.8, iReallyMeanIt: true),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        color: context.colors.onPrimary,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
                 Positioned(
                   bottom: 12,
                   left: 10,
                   right: 10,
                   child: Row(
                     children: [
-                      Builder(
-                        builder: (context) {
-                          final badgeRaw = media.formattedEpisodeTitle ?? '';
-                          final badgeText = badgeRaw.replaceAll(
-                            RegExp(r'^(▶\s*)?(Episode|Chapter)\s*', caseSensitive: false),
-                            '',
-                          );
-                          return Container(
-                            constraints: const BoxConstraints(maxWidth: 200),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary.opaque(0.5, iReallyMeanIt: true),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.opaque(0.3),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                )
-                              ],
-                            ),
-                            child: AnymexText(
-                              text: badgeText,
-                              size: 11,
-                              maxLines: 1,
-                              variant: TextVariant.bold,
-                              color: colorScheme.onPrimary,
-                              overflow: TextOverflow.ellipsis,
-                              isMarquee: false,
-                            ),
-                          );
-                        },
+                      Container(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.opaque(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            )
+                          ],
+                        ),
+                        child: AnymeXText(media.formattedEpisodeTitle ?? '',
+                          size: 11,
+                          maxLines: 1,
+                          variant: TextVariant.bold,
+                          color: colorScheme.onPrimary,
+                          overflow: TextOverflow.ellipsis,
+                          isMarquee: false,
+                        ),
                       ),
                     ],
                   ),
@@ -159,8 +189,7 @@ class ContinueWatchingCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        AnymexText(
-                          text: media.progressTitle ?? media.title!,
+                        AnymeXText(media.progressTitle ?? media.title!,
                           size: 13,
                           maxLines: 1,
                           variant: TextVariant.bold,
@@ -171,8 +200,7 @@ class ContinueWatchingCard extends StatelessWidget {
                             media.title != media.progressTitle)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
-                            child: AnymexText(
-                              text: media.title!,
+                            child: AnymeXText(media.title!,
                               size: 11,
                               maxLines: 1,
                               variant: TextVariant.regular,
@@ -187,8 +215,7 @@ class ContinueWatchingCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: AnymexText(
-                      text: media.progressText!,
+                    child: AnymeXText(media.progressText!,
                       size: 11,
                       color: colorScheme.primary,
                       variant: TextVariant.bold,

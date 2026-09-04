@@ -1,5 +1,6 @@
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
 import 'package:anymex/screens/anime/watch/controller/player_utils.dart';
+import 'package:anymex/controllers/watchium/watchium_service.dart';
 import 'package:anymex/utils/aniskip.dart' as aniskip;
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/common/anymex_slider_m3.dart';
@@ -40,37 +41,67 @@ class _ProgressSliderState extends State<ProgressSlider> {
     final controller = Get.find<PlayerController>();
     final colorScheme = context.colors;
 
-    final isDefaultStyle = widget.style == SliderStyle.defaultM3;
-    final containerHeight = isDefaultStyle ? 27.0 : 27.0;
-    final markerSize = isDefaultStyle ? 5.0 : 4.0;
+    return Obx(() {
+      final duration = controller.episodeDuration.value.inMilliseconds;
+      final position = controller.currentPosition.value.inMilliseconds;
+      final buffer = controller.bufferred.value.inMilliseconds;
 
-    return RepaintBoundary(
-      child: SizedBox(
-        height: containerHeight,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
+      final maxValue = duration > 0 ? duration.toDouble() : 1.0;
+      final clampedPosition = position.toDouble().clamp(0.0, maxValue);
+      final clampedBuffer = buffer.toDouble().clamp(0.0, maxValue);
+
+      final skipTimes = controller.skipTimes;
+      final totalDuration = controller.episodeDuration.value;
+
+      final isDefaultStyle = widget.style == SliderStyle.defaultM3;
+      final containerHeight = isDefaultStyle ? 27.0 : 27.0;
+      final markerSize = isDefaultStyle ? 15.0 : 4.0;
+
+      bool isFollowMode() {
+        try {
+          final watchium = Get.find<WatchiumService>();
+          return watchium.inRoom.value && watchium.followHost.value && !watchium.isHost.value;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      return IgnorePointer(
+        ignoring: isFollowMode(),
+        child: SizedBox(
+          height: containerHeight,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
             if (isDefaultStyle)
-              Obx(() {
-                final duration = controller.episodeDuration.value.inMilliseconds;
-                final position = controller.currentPosition.value.inMilliseconds;
-                final buffer = controller.bufferred.value.inMilliseconds;
-
-                final maxValue = duration > 0 ? duration.toDouble() : 1.0;
-                final clampedPosition = position.toDouble().clamp(0.0, maxValue);
-                final clampedBuffer = buffer.toDouble().clamp(0.0, maxValue);
-
-                return AnymeXSliderM3(
-                  theme: AnymeXSliderM3Theme(
-                    trackHeight: 6,
-                    thumbHeight: 12,
-                    activeColor: widget.activeTrackColor,
-                    inactiveColor: widget.inactiveTrackColor,
-                    secondaryActiveColor: widget.secondaryActiveTrackColor,
-                  ),
-                  label: PlayerUtils.formatDuration(
-                      Duration(milliseconds: position)),
-                  divisions: null,
+              AnymeXSliderM3(
+                theme: AnymeXSliderM3Theme(
+                  trackHeight: 15,
+                  thumbHeight: 20,
+                  activeColor: widget.activeTrackColor,
+                  inactiveColor: widget.inactiveTrackColor,
+                  secondaryActiveColor: widget.secondaryActiveTrackColor,
+                ),
+                label: PlayerUtils.formatDuration(
+                    Duration(milliseconds: position)),
+                divisions: null,
+                focusNode:
+                    FocusNode(canRequestFocus: false, skipTraversal: true),
+                min: 0,
+                value: clampedPosition,
+                max: maxValue,
+                secondaryTrackValue: clampedBuffer,
+                onChangeStart: (v) => controller.isSeeking.value = true,
+                onChanged: (v) =>
+                    controller.seekTo(Duration(milliseconds: v.toInt())),
+                onChangeEnd: (v) {
+                  controller.isSeeking.value = false;
+                },
+              )
+            else
+              SliderTheme(
+                data: _getSliderTheme(colorScheme, widget.style),
+                child: Slider(
                   focusNode:
                       FocusNode(canRequestFocus: false, skipTraversal: true),
                   min: 0,
@@ -83,70 +114,31 @@ class _ProgressSliderState extends State<ProgressSlider> {
                   onChangeEnd: (v) {
                     controller.isSeeking.value = false;
                   },
-                );
-              })
-            else
-              Obx(() {
-                final duration = controller.episodeDuration.value.inMilliseconds;
-                final position = controller.currentPosition.value.inMilliseconds;
-                final buffer = controller.bufferred.value.inMilliseconds;
-
-                final maxValue = duration > 0 ? duration.toDouble() : 1.0;
-                final clampedPosition = position.toDouble().clamp(0.0, maxValue);
-                final clampedBuffer = buffer.toDouble().clamp(0.0, maxValue);
-
-                return SliderTheme(
-                  data: _getSliderTheme(colorScheme, widget.style),
-                  child: Slider(
-                    focusNode:
-                        FocusNode(canRequestFocus: false, skipTraversal: true),
-                    min: 0,
-                    value: clampedPosition,
-                    max: maxValue,
-                    secondaryTrackValue: clampedBuffer,
-                    onChangeStart: (v) => controller.isSeeking.value = true,
-                    onChanged: (v) =>
-                        controller.seekTo(Duration(milliseconds: v.toInt())),
-                    onChangeEnd: (v) {
-                      controller.isSeeking.value = false;
-                    },
-                  ),
-                );
-              }),
-            Obx(() {
-              final skipTimes = controller.skipTimes;
-              final totalDuration = controller.episodeDuration.value;
-              final position = controller.currentPosition.value.inMilliseconds;
-              final maxValue = totalDuration.inMilliseconds > 0
-                  ? totalDuration.inMilliseconds.toDouble()
-                  : 1.0;
-              final clampedPosition = position.toDouble().clamp(0.0, maxValue);
-
-              if (skipTimes != null && totalDuration.inMilliseconds > 0) {
-                return Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: SkipTimelinePainter(
-                        skipTimes: skipTimes,
-                        totalDuration: totalDuration,
-                        currentPosition: Duration(
-                          milliseconds: clampedPosition.toInt(),
-                        ),
-                        markerHeight: markerSize,
-                        hideUnderThumb: widget.style != SliderStyle.ios,
-                        segmentColor: widget.segmentColor,
-                        recapSegmentColor: widget.recapSegmentColor,
+                ),
+              ),
+            if (skipTimes != null && totalDuration.inMilliseconds > 0)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: SkipTimelinePainter(
+                      skipTimes: skipTimes,
+                      totalDuration: totalDuration,
+                      currentPosition: Duration(
+                        milliseconds: clampedPosition.toInt(),
                       ),
+                      markerHeight: markerSize,
+                      hideUnderThumb: widget.style != SliderStyle.ios,
+                      segmentColor: widget.segmentColor,
+                      recapSegmentColor: widget.recapSegmentColor,
                     ),
                   ),
-                );
-              }
-              return const SizedBox.shrink();
-            }),
+                ),
+              ),
           ],
         ),
       ),
-    );
+      );
+    });
   }
 
   SliderThemeData _getSliderTheme(ColorScheme colorScheme, SliderStyle style) {
@@ -166,11 +158,11 @@ class _ProgressSliderState extends State<ProgressSlider> {
         );
       case SliderStyle.capsule:
         return SliderThemeData(
-          trackHeight: 4,
+          trackHeight: 8,
           thumbShape: const CapsuleThumb(
-            width: 4,
-            height: 16,
-            pressedHeight: 20,
+            width: 6,
+            height: 24,
+            pressedHeight: 28,
           ),
           trackShape: CapsuleSliderTrack(),
           activeTrackColor: widget.activeTrackColor ?? colorScheme.primary,

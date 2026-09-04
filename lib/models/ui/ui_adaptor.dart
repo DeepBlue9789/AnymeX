@@ -19,6 +19,7 @@ class UISettings {
   bool enableAnimation;
   bool disableGradient;
   Map<String, bool> homePageCardsMal;
+  Map<String, bool> homePageCardsSimkl;
   int cardStyle;
   int historyCardStyle;
   bool liquidMode;
@@ -27,7 +28,14 @@ class UISettings {
   bool usePosterColor;
   bool enablePosterKenBurns;
   int carouselStyle;
-  bool showContinueWatchingCard;
+  bool useLegacyHeader;
+  bool useGrainTexture;
+  double grainIntensity;
+  bool enableImmersiveMode;
+  int navBarStyle;
+  String appFontFamily;
+  double bottomNavBarMargin;
+  bool useLegacyNavbar;
 
   UISettings({
     this.glowMultiplier = 1.0,
@@ -44,9 +52,10 @@ class UISettings {
     this.translucentTabBar = true,
     Map<String, bool>? homePageCards,
     Map<String, bool>? homePageCardsMal,
+    Map<String, bool>? homePageCardsSimkl,
     this.enableAnimation = true,
     this.disableGradient = false,
-    this.cardStyle = 2,
+    this.cardStyle = 0,
     this.historyCardStyle = 0,
     this.liquidMode = true,
     this.retainOriginalColor = false,
@@ -54,7 +63,14 @@ class UISettings {
     this.usePosterColor = false,
     this.enablePosterKenBurns = true,
     this.carouselStyle = 0,
-    this.showContinueWatchingCard = true,
+    this.useLegacyHeader = false,
+    this.useGrainTexture = false,
+    this.grainIntensity = 0.05,
+    this.enableImmersiveMode = false,
+    this.navBarStyle = 1,
+    this.appFontFamily = '',
+    this.bottomNavBarMargin = 32.0,
+    this.useLegacyNavbar = true,
   })  : homePageCards = homePageCards ??
             {
               "Continue Watching": true,
@@ -83,21 +99,50 @@ class UISettings {
               "Dropped Manga": false,
               "Planning Animes": false,
               "Planning Manga": false,
+            },
+        homePageCardsSimkl = homePageCardsSimkl ??
+            {
+              "Continue Watching (Movies)": true,
+              "Continue Watching (Shows)": true,
+              "Completed Movies": false,
+              "Completed Shows": false,
+              "Paused Movies": false,
+              "Paused Shows": false,
+              "Dropped Movies": false,
+              "Dropped Shows": false,
+              "Planning Movies": false,
+              "Planning Shows": false,
             };
 
   void normalizeMaps() {
     homePageCards = Map<String, bool>.from(homePageCards);
     homePageCards.putIfAbsent('Recommended Animes', () => true);
     homePageCards.putIfAbsent('Recommended Mangas', () => true);
+    if (!homePageCards.values.any((v) => v)) {
+      homePageCards['Recommended Animes'] = true;
+      homePageCards['Recommended Mangas'] = true;
+    }
+
     homePageCardsMal = Map<String, bool>.from(homePageCardsMal);
     homePageCardsMal.putIfAbsent('Recommended Animes', () => true);
     homePageCardsMal.putIfAbsent('Recommended Mangas', () => true);
+    if (!homePageCardsMal.values.any((v) => v)) {
+      homePageCardsMal['Recommended Animes'] = true;
+      homePageCardsMal['Recommended Mangas'] = true;
+    }
+
+    homePageCardsSimkl = Map<String, bool>.from(homePageCardsSimkl);
+    if (homePageCardsSimkl.isNotEmpty && !homePageCardsSimkl.values.any((v) => v)) {
+      homePageCardsSimkl[homePageCardsSimkl.keys.first] = true;
+    }
   }
 
   factory UISettings.fromDB() {
     final uiDefaults = UISettings();
     final homeCardsRaw = UISettingsKeys.homePageCards.get<String?>(null);
     final homeCardsMalRaw = UISettingsKeys.homePageCardsMal.get<String?>(null);
+    final homeCardsSimklRaw =
+        UISettingsKeys.homePageCardsSimkl.get<String?>(null);
     return UISettings(
       glowMultiplier:
           UISettingsKeys.glowMultiplier.get<double>(uiDefaults.glowMultiplier),
@@ -133,6 +178,9 @@ class UISettings {
       homePageCardsMal: homeCardsMalRaw != null
           ? Map<String, bool>.from(jsonDecode(homeCardsMalRaw))
           : null,
+      homePageCardsSimkl: homeCardsSimklRaw != null
+          ? Map<String, bool>.from(jsonDecode(homeCardsSimklRaw))
+          : null,
       cardStyle: UISettingsKeys.cardStyle.get<int>(uiDefaults.cardStyle),
       historyCardStyle:
           UISettingsKeys.historyCardStyle.get<int>(uiDefaults.historyCardStyle),
@@ -147,8 +195,21 @@ class UISettings {
           .get<bool>(uiDefaults.enablePosterKenBurns),
       carouselStyle:
           UISettingsKeys.carouselStyle.get<int>(uiDefaults.carouselStyle),
-      showContinueWatchingCard: UISettingsKeys.showContinueWatchingCard
-          .get<bool>(uiDefaults.showContinueWatchingCard),
+      useLegacyHeader:
+          UISettingsKeys.useLegacyHeader.get<bool>(uiDefaults.useLegacyHeader),
+      useGrainTexture:
+          UISettingsKeys.useGrainTexture.get<bool>(uiDefaults.useGrainTexture),
+      grainIntensity:
+          UISettingsKeys.grainIntensity.get<double>(uiDefaults.grainIntensity),
+      enableImmersiveMode: UISettingsKeys.enableImmersiveMode
+          .get<bool>(uiDefaults.enableImmersiveMode),
+      navBarStyle: UISettingsKeys.navBarStyle.get<int>(uiDefaults.navBarStyle),
+      appFontFamily:
+          UISettingsKeys.appFontFamily.get<String>(uiDefaults.appFontFamily),
+      bottomNavBarMargin: UISettingsKeys.bottomNavBarMargin
+          .get<double>(uiDefaults.bottomNavBarMargin),
+      useLegacyNavbar: UISettingsKeys.useLegacyNavbar
+          .get<bool>(uiDefaults.useLegacyNavbar),
     );
   }
 }

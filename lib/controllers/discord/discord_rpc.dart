@@ -6,14 +6,13 @@ import 'dart:io';
 import 'package:anymex/database/isar_models/chapter.dart';
 import 'package:anymex/database/isar_models/episode.dart';
 import 'package:anymex/database/data_keys/keys.dart';
-import 'package:anymex/database/kv_helper.dart';
 import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/utils/extension_utils.dart';
 import 'package:anymex/widgets/non_widgets/snackbar.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_discord_rpc_fork/flutter_discord_rpc.dart';
+import 'package:dart_discord_presence/dart_discord_presence.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
@@ -106,8 +105,9 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       'wss://gateway.discord.gg/?v=10&encoding=json';
   static const String _apiBaseUrl = 'https://discord.com/api/v10';
 
-  FlutterDiscordRPC? _discordRPC;
-  StreamSubscription<bool>? _desktopConnectionSub;
+  DiscordRPC? _discordRPC;
+  StreamSubscription? _onReadySub;
+  StreamSubscription? _onDisconnectedSub;
 
   WebSocket? _gatewaySocket;
   Timer? _heartbeatTimer;
@@ -123,6 +123,7 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
   final Rx<DiscordProfile?> profile = Rx<DiscordProfile?>(null);
   final _isLoading = false.obs;
   final _enabled = true.obs;
+  final Map<String, String> _assetCache = {};
 
   bool get isConnected => _isConnected.value;
   bool get isMobile => _isMobile.value;
@@ -271,21 +272,26 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
 
   Future<void> _initializeDesktopRPC() async {
     try {
-      await FlutterDiscordRPC.initialize(_applicationId);
-      _discordRPC = FlutterDiscordRPC.instance;
-      _desktopConnectionSub?.cancel();
-      _desktopConnectionSub =
-          _discordRPC!.isConnectedStream.listen((connected) {
-        _isConnected.value = connected;
-      });
-
-      await _discordRPC!.connect(autoRetry: true);
-      _isConnected.value = _discordRPC!.isConnected;
-      if (!_isConnected.value) {
-        print('Discord RPC connect requested (Desktop), but not connected yet');
+      if (!DiscordRPC.isAvailable) {
+        print('Discord RPC not available on this platform');
+        _isConnected.value = false;
         return;
       }
-      print('Connected to Discord RPC (Desktop)');
+      _discordRPC = DiscordRPC();
+      _onReadySub?.cancel();
+      _onReadySub = _discordRPC!.onReady.listen((event) {
+        _isConnected.value = true;
+        print('Connected to Discord RPC (Desktop) as ${event.user.username}');
+      });
+      _onDisconnectedSub?.cancel();
+      _onDisconnectedSub = _discordRPC!.onDisconnected.listen((event) {
+        _isConnected.value = false;
+        print('Disconnected from Discord RPC (Desktop): ${event.message}');
+      });
+
+      await _discordRPC!.initialize(_applicationId);
+      _isConnected.value = true;
+      print('Initialized Discord RPC (Desktop)');
 
       await updateBrowsingPresence(
         activity: kDebugMode ? 'Working on the App' : 'Browsing Stuff',
@@ -301,7 +307,7 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
     if (isMobile) {
       return true;
     }
-    final connected = _discordRPC != null && _discordRPC!.isConnected;
+    final connected = _discordRPC != null && _isConnected.value;
     if (!connected) {
       _isConnected.value = false;
       print('Skipping $action: Discord RPC is not connected (Desktop)');
@@ -430,6 +436,9 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<String> urlToDcAsset(String url) async {
+    if (_assetCache.containsKey(url)) {
+      return _assetCache[url]!;
+    }
     try {
       print('Converting URL to Discord asset: $url');
 
@@ -451,6 +460,7 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       if (resp.statusCode == 200 && resp.data != null && resp.data.isNotEmpty) {
         final assetPath = "mp:${resp.data[0]['external_asset_path']}";
         print('Successfully converted to asset: $assetPath');
+        _assetCache[url] = assetPath;
         return assetPath;
       } else {
         print('Failed to convert asset: ${resp.statusCode} - ${resp.data}');
@@ -530,25 +540,27 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       print('Anime presence updated successfully (Mobile)');
     } else {
       try {
-        await _discordRPC!.setActivity(
-          activity: RPCActivity(
+        await _discordRPC!.setPresence(
+          DiscordPresence(
+            type: DiscordActivityType.watching,
             details: animeTitle,
             state:
                 'Episode $episodeNumber ${!episodeName.toLowerCase().contains('episode') ? '– $episodeName' : ''} - $totalEpisodes',
-            activityType: ActivityType.watching,
-            timestamps: RPCTimestamps(
-              start: startTime.millisecondsSinceEpoch,
-              end: endTime.millisecondsSinceEpoch,
+            timestamps: DiscordTimestamps(
+              start: startTime.millisecondsSinceEpoch ~/ 1000,
+              end: endTime.millisecondsSinceEpoch ~/ 1000,
             ),
-            assets: RPCAssets(
-              largeImage: await _processImageUrl(coverUrl),
-              largeText: animeTitle,
-              smallImage: await _processImageUrl(_getAppIconUrl()),
-              smallText: 'AnymeX',
+            largeAsset: DiscordAsset(
+              key: await _processImageUrl(coverUrl),
+              text: animeTitle,
+            ),
+            smallAsset: DiscordAsset(
+              key: await _processImageUrl(_getAppIconUrl()),
+              text: 'AnymeX',
             ),
             buttons: [
-              RPCButton(label: 'View Anime', url: anilistUrl),
-              const RPCButton(
+              DiscordButton(label: 'View Anime', url: anilistUrl),
+              const DiscordButton(
                 label: 'Watch on AnymeX',
                 url: 'https://github.com/RyanYuuki/AnymeX/',
               ),
@@ -625,20 +637,22 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       print('Paused anime presence updated successfully (Mobile)');
     } else {
       try {
-        await _discordRPC!.setActivity(
-          activity: RPCActivity(
+        await _discordRPC!.setPresence(
+          DiscordPresence(
+            type: DiscordActivityType.watching,
             details: animeTitle,
             state: 'Episode $episodeNumber$timeDisplay (Paused)',
-            activityType: ActivityType.watching,
-            assets: RPCAssets(
-              largeImage: await _processImageUrl(coverUrl),
-              largeText: animeTitle,
-              smallImage: await _processImageUrl(_getAppIconUrl()),
-              smallText: 'AnymeX',
+            largeAsset: DiscordAsset(
+              key: await _processImageUrl(coverUrl),
+              text: animeTitle,
+            ),
+            smallAsset: DiscordAsset(
+              key: await _processImageUrl(_getAppIconUrl()),
+              text: 'AnymeX',
             ),
             buttons: [
-              RPCButton(label: 'View Anime', url: anilistUrl),
-              const RPCButton(
+              DiscordButton(label: 'View Anime', url: anilistUrl),
+              const DiscordButton(
                 label: 'Watch on AnymeX',
                 url: 'https://github.com/RyanYuuki/AnymeX/',
               ),
@@ -709,21 +723,23 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       print('Manga presence updated successfully (Mobile)');
     } else {
       try {
-        await _discordRPC!.setActivity(
-          activity: RPCActivity(
+        await _discordRPC!.setPresence(
+          DiscordPresence(
+            type: DiscordActivityType.playing,
             details: mangaTitle,
             state:
                 'Chapter: $chapterNumber/$totalChapters • Page: $currentPage/$totalPages',
-            activityType: ActivityType.playing,
-            assets: RPCAssets(
-              largeImage: await _processImageUrl(coverUrl),
-              largeText: mangaTitle,
-              smallImage: await _processImageUrl(_getAppIconUrl()),
-              smallText: 'AnymeX',
+            largeAsset: DiscordAsset(
+              key: await _processImageUrl(coverUrl),
+              text: mangaTitle,
+            ),
+            smallAsset: DiscordAsset(
+              key: await _processImageUrl(_getAppIconUrl()),
+              text: 'AnymeX',
             ),
             buttons: [
-              RPCButton(label: 'View Manga', url: anilistUrl),
-              const RPCButton(
+              DiscordButton(label: 'View Manga', url: anilistUrl),
+              const DiscordButton(
                 label: 'Read on AnymeX',
                 url: 'https://github.com/RyanYuuki/AnymeX/',
               ),
@@ -788,20 +804,22 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       print('Media presence updated successfully (Mobile)');
     } else {
       try {
-        await _discordRPC!.setActivity(
-          activity: RPCActivity(
+        await _discordRPC!.setPresence(
+          DiscordPresence(
+            type: DiscordActivityType.watching,
             details: animeTitle,
             state: 'Viewing $type',
-            activityType: ActivityType.watching,
-            assets: RPCAssets(
-              largeImage: await _processImageUrl(media.cover ?? media.poster),
-              largeText: animeTitle,
-              smallImage: await _processImageUrl(_getAppIconUrl()),
-              smallText: 'AnymeX',
+            largeAsset: DiscordAsset(
+              key: await _processImageUrl(media.cover ?? media.poster),
+              text: animeTitle,
+            ),
+            smallAsset: DiscordAsset(
+              key: await _processImageUrl(_getAppIconUrl()),
+              text: 'AnymeX',
             ),
             buttons: [
-              RPCButton(label: 'View $type', url: anilistUrl),
-              const RPCButton(
+              DiscordButton(label: 'View $type', url: anilistUrl),
+              const DiscordButton(
                 label: 'Watch on AnymeX',
                 url: 'https://github.com/RyanYuuki/AnymeX/',
               ),
@@ -871,14 +889,14 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       print('Browsing presence updated successfully (Mobile)');
     } else {
       try {
-        await _discordRPC!.setActivity(
-          activity: RPCActivity(
+        await _discordRPC!.setPresence(
+          DiscordPresence(
+            type: DiscordActivityType.playing,
             details: activity ?? 'Browsing Stuff',
             state: details ?? 'Idle',
-            activityType: ActivityType.playing,
-            assets: RPCAssets(
-              largeImage: await _processImageUrl(_getAppIconUrl()),
-              largeText: 'AnymeX - Anime & Manga',
+            largeAsset: DiscordAsset(
+              key: await _processImageUrl(_getAppIconUrl()),
+              text: 'AnymeX - Anime & Manga',
             ),
           ),
         );
@@ -909,7 +927,7 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       print('Presence cleared successfully');
     } else {
       try {
-        await _discordRPC!.clearActivity();
+        await _discordRPC!.clearPresence();
         print('Presence cleared successfully');
       } catch (e) {
         print('Error clearing presence: $e');
@@ -933,11 +951,13 @@ class DiscordRPCController extends GetxController with WidgetsBindingObserver {
       _gatewaySocket = null;
       _sequenceNumber = null;
     } else {
-      await _desktopConnectionSub?.cancel();
-      _desktopConnectionSub = null;
+      await _onReadySub?.cancel();
+      _onReadySub = null;
+      await _onDisconnectedSub?.cancel();
+      _onDisconnectedSub = null;
       if (_discordRPC != null) {
         try {
-          await _discordRPC!.disconnect();
+          await _discordRPC!.dispose();
         } catch (e) {
           print('Error disconnecting from Discord RPC: $e');
         }

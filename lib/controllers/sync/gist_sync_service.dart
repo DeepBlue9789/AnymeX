@@ -241,7 +241,12 @@ class GistSyncService {
       Uri.parse('$_apiBase/gists/$gistId'),
       _headers,
     );
-    if (resp.statusCode != 200) return {};
+    if (resp.statusCode != 200) {
+      if (resp.statusCode == 404) {
+        _gistId = null;
+      }
+      return {};
+    }
 
     final data = json.decode(resp.body) as Map<String, dynamic>;
     final content = ((data['files'] as Map<String, dynamic>?)?[_fileName]
@@ -250,11 +255,15 @@ class GistSyncService {
     return json.decode(content) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> _downloadRaw() async {
+  Future<Map<String, dynamic>> _downloadRaw({int retryAttempt = 0}) async {
     try {
       final gistId = await _ensureGistId();
       if (gistId == null) return {};
-      return _downloadRawByGistId(gistId);
+      final data = await _downloadRawByGistId(gistId);
+      if (_gistId == null && retryAttempt < 1) {
+        return _downloadRaw(retryAttempt: retryAttempt + 1);
+      }
+      return data;
     } catch (e) {
       Logger.e('[GistSync] _downloadRaw: $e');
       return {};
@@ -271,7 +280,9 @@ class GistSyncService {
     try {
       final gistId = await _findExistingGistId();
       if (gistId == null) return null;
-      return _downloadRawByGistId(gistId);
+      final data = await _downloadRawByGistId(gistId);
+      if (_gistId == null) return null;
+      return data;
     } catch (e) {
       Logger.e('[GistSync] downloadRawIfExists: $e');
       return null;
@@ -288,7 +299,7 @@ class GistSyncService {
     }
   }
 
-  Future<String?> syncGistHtmlUrl({bool createIfMissing = false}) async {
+  Future<String?> syncGistHtmlUrl({bool createIfMissing = false, int retryAttempt = 0}) async {
     if (!isReady) throw StateError('Sync service is not ready.');
     try {
       final gistId =
@@ -300,6 +311,12 @@ class GistSyncService {
         _headers,
       );
       if (resp.statusCode != 200) {
+        if (resp.statusCode == 404) {
+          _gistId = null;
+          if (createIfMissing && retryAttempt < 1) {
+            return syncGistHtmlUrl(createIfMissing: true, retryAttempt: retryAttempt + 1);
+          }
+        }
         Logger.e('[GistSync] Fetch gist URL failed: ${resp.statusCode}');
         return null;
       }
@@ -321,7 +338,7 @@ class GistSyncService {
     return null;
   }
 
-  Future<void> _upload(Map<String, dynamic> data) async {
+  Future<void> _upload(Map<String, dynamic> data, {int retryAttempt = 0}) async {
     try {
       final gistId = await _ensureGistId();
       if (gistId == null) return;
@@ -336,6 +353,12 @@ class GistSyncService {
         }),
       );
       if (resp.statusCode != 200) {
+        if (resp.statusCode == 404) {
+          _gistId = null;
+          if (retryAttempt < 1) {
+            return _upload(data, retryAttempt: retryAttempt + 1);
+          }
+        }
         Logger.e('[GistSync] Upload failed: ${resp.statusCode}');
       }
     } catch (e) {
@@ -366,7 +389,7 @@ class GistSyncService {
     return buffer.toString();
   }
 
-  Future<Map<String, dynamic>> syncNow() async {
+  Future<Map<String, dynamic>> syncNow({int retryAttempt = 0}) async {
     if (!isReady) throw StateError('Sync service is not ready.');
 
     final gistId = await _ensureGistId();
@@ -379,6 +402,12 @@ class GistSyncService {
       _headers,
     );
     if (resp.statusCode != 200) {
+      if (resp.statusCode == 404) {
+        _gistId = null;
+        if (retryAttempt < 1) {
+          return syncNow(retryAttempt: retryAttempt + 1);
+        }
+      }
       throw Exception('GitHub returned HTTP ${resp.statusCode}.');
     }
 

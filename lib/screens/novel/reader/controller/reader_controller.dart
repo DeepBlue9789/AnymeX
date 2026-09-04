@@ -4,6 +4,7 @@ import 'package:anymex/controllers/offline/offline_storage_controller.dart';
 import 'package:anymex/controllers/sync/gist_sync_controller.dart';
 import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/database/isar_models/chapter.dart';
+import 'package:anymex/controllers/stats/stats_tracker.dart';
 import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/services/volume_key_handler.dart';
 import 'package:anymex/utils/logger.dart';
@@ -15,6 +16,7 @@ import 'package:get/get.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart';
 import 'package:vibration/vibration.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 enum LoadingState { loading, loaded, error }
 
@@ -117,6 +119,7 @@ class NovelReaderController extends GetxController {
 
   Rx<Chapter> savedChapter = Chapter().obs;
   RxInt consecutiveReads = 0.obs;
+  Timer? _statsTimer;
 
   @override
   void onInit() {
@@ -124,9 +127,23 @@ class NovelReaderController extends GetxController {
     currentChapter.value = initialChapter;
     updateNavigationButtons();
     _loadSettings();
+    if (keepScreenOn.value) {
+      WakelockPlus.enable();
+    }
     fetchData();
     scrollController.addListener(_scrollListener);
     _initTts();
+    _statsTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      Get.find<StatsTracker>().logRead(
+        media.id,
+        media.title,
+        1,
+        chaptersCompleted: 0,
+        type: 'novel',
+        poster: media.poster,
+        cover: media.cover,
+      );
+    });
   }
 
   @override
@@ -138,6 +155,8 @@ class NovelReaderController extends GetxController {
     _hideTimer?.cancel();
     _disableVolumeKeys();
     flutterTts.stop();
+    WakelockPlus.disable();
+    _statsTimer?.cancel();
     super.onClose();
   }
 
@@ -176,7 +195,9 @@ class NovelReaderController extends GetxController {
         NovelReaderKeys.overscrollToChapter.get<bool>(true);
 
     if (keepScreenOn.value) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      WakelockPlus.enable();
+    } else {
+      WakelockPlus.disable();
     }
     if (volumeButtonScrolling.value) {
       _enableVolumeKeys();
@@ -230,7 +251,9 @@ class NovelReaderController extends GetxController {
   void _handleVolumeEvent(String event) {
     if (Get.isBottomSheetOpen == true ||
         Get.isDialogOpen == true ||
-        Get.isOverlaysOpen == true) return;
+        Get.isOverlaysOpen == true) {
+      return;
+    }
     if (showControls.value) {
       toggleControls();
       return;
@@ -386,13 +409,14 @@ class NovelReaderController extends GetxController {
   void _scrollToTtsElement() {
     if (ttsSegments.isEmpty || !scrollController.hasClients) return;
 
+    final currentSegIndex =
+        ttsCurrentElement.value.clamp(0, ttsSegments.length - 1);
+    final currentSeg = ttsSegments[currentSegIndex];
+
     int charsBefore = 0;
-    for (int i = 0;
-        i < ttsCurrentElement.value && i < ttsSegments.length;
-        i++) {
+    for (int i = 0; i < currentSegIndex; i++) {
       charsBefore += ttsSegments[i].length;
     }
-
     charsBefore += ttsCurrentWordStart.value;
 
     int totalChars = 0;
@@ -401,21 +425,40 @@ class NovelReaderController extends GetxController {
     }
     if (totalChars <= 0) return;
 
+    final double charProgress = (charsBefore / totalChars).clamp(0.0, 1.0);
+    final double wordProgressInSeg = currentSeg.isEmpty
+        ? 0.0
+        : (ttsCurrentWordStart.value / currentSeg.length).clamp(0.0, 1.0);
+    final double segProgress =
+        ((currentSegIndex + wordProgressInSeg) / ttsSegments.length)
+            .clamp(0.0, 1.0);
+
+    // Weighted progress: 70% character density (time spent reading), 30% paragraph structure
+    final double weightedProgress = (charProgress * 0.7) + (segProgress * 0.3);
+
     final double viewportHeight = scrollController.position.viewportDimension;
-    final double totalContentHeight =
-        scrollController.position.maxScrollExtent + viewportHeight;
-    final double targetPosition =
-        (charsBefore / totalChars) * totalContentHeight;
+    final double maxScroll = scrollController.position.maxScrollExtent;
+    final double totalContentHeight = maxScroll + viewportHeight;
 
-    final double scrollTo = (targetPosition - viewportHeight * 0.4)
-        .clamp(0.0, scrollController.position.maxScrollExtent);
+    final double targetPosition = weightedProgress * totalContentHeight;
+    final double desiredScroll = (targetPosition - viewportHeight * 0.35)
+        .clamp(0.0, maxScroll);
 
-    if (scrollTo > scrollController.offset + 10) {
-      scrollController.animateTo(
-        scrollTo,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+    final double currentOffset = scrollController.offset;
+
+    // Comfort zone check: if target is already inside 15% - 55% of viewport height, don't jump!
+    final double upperLimit = currentOffset + (viewportHeight * 0.15);
+    final double lowerLimit = currentOffset + (viewportHeight * 0.55);
+
+    if (targetPosition < upperLimit || targetPosition > lowerLimit) {
+      final double diff = (desiredScroll - currentOffset).abs();
+      if (diff > 40) {
+        scrollController.animateTo(
+          desiredScroll,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+        );
+      }
     }
   }
 
@@ -426,7 +469,9 @@ class NovelReaderController extends GetxController {
     final currentSegment = ttsSegments[ttsCurrentElement.value];
     if (wordStart < 0 ||
         wordEnd <= wordStart ||
-        wordEnd > currentSegment.length) return;
+        wordEnd > currentSegment.length) {
+      return;
+    }
 
     final normalizedSegment =
         currentSegment.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -574,9 +619,13 @@ class NovelReaderController extends GetxController {
       ttsPlaying.value = false;
       return;
     }
+    if (autoScrollEnabled.value) {
+      autoScrollEnabled.value = false;
+      _stopAutoScroll();
+      _saveSettings();
+    }
     if (ttsHighlightedElement.value >= 0 &&
         ttsHighlightedElement.value == ttsCurrentElement.value) {
-      // reusume state
       final fullText = ttsSegments[ttsCurrentElement.value];
       final resumeFrom = ttsCurrentWordEnd.value.clamp(0, fullText.length);
       if (resumeFrom > 0 && resumeFrom < fullText.length) {
@@ -620,6 +669,11 @@ class NovelReaderController extends GetxController {
       ttsCurrentWordEnd.value = 0;
       return;
     }
+    if (autoScrollEnabled.value) {
+      autoScrollEnabled.value = false;
+      _stopAutoScroll();
+      _saveSettings();
+    }
     await flutterTts.setSpeechRate(ttsSpeed.value);
     await flutterTts.setPitch(ttsPitch.value);
     if (ttsVoice.value.isNotEmpty) {
@@ -658,8 +712,9 @@ class NovelReaderController extends GetxController {
     final ctrl = Get.isRegistered<GistSyncController>()
         ? Get.find<GistSyncController>()
         : null;
-    if (ctrl == null || !ctrl.isLoggedIn.value || !ctrl.syncEnabled.value)
+    if (ctrl == null || !ctrl.isLoggedIn.value || !ctrl.syncEnabled.value) {
       return;
+    }
     try {
       final chapter = currentChapter.value;
       if (chapter.number == null) return;
@@ -690,6 +745,14 @@ class NovelReaderController extends GetxController {
   void toggleAutoScroll() {
     autoScrollEnabled.value = !autoScrollEnabled.value;
     if (autoScrollEnabled.value) {
+      if (ttsPlaying.value) {
+        flutterTts.stop();
+        ttsPlaying.value = false;
+        ttsHighlightedElement.value = -1;
+        ttsCurrentWordStart.value = 0;
+        ttsCurrentWordEnd.value = 0;
+        if (_rawNovelContent.isNotEmpty) novelContent.value = _rawNovelContent;
+      }
       _startAutoScroll();
     } else {
       _stopAutoScroll();
@@ -806,10 +869,13 @@ class NovelReaderController extends GetxController {
         chapter.pageNumber == null ||
         chapter.totalPages == null ||
         chapter.totalPages! <= 0 ||
-        chapter.pageNumber! < chapter.totalPages!) return false;
+        chapter.pageNumber! < chapter.totalPages!) {
+      return false;
+    }
     final totalChapters = double.tryParse(media.totalChapters ?? '');
-    if (totalChapters != null && totalChapters > 0)
+    if (totalChapters != null && totalChapters > 0) {
       return chapterNumber >= totalChapters;
+    }
     for (final item in chapters) {
       if (item.number != null && item.number! > chapterNumber) return false;
     }
@@ -1111,9 +1177,11 @@ class NovelReaderController extends GetxController {
 
   void toggleKeepScreenOn() {
     keepScreenOn.value = !keepScreenOn.value;
-    SystemChrome.setEnabledSystemUIMode(
-        keepScreenOn.value ? SystemUiMode.edgeToEdge : SystemUiMode.manual,
-        overlays: SystemUiOverlay.values);
+    if (keepScreenOn.value) {
+      WakelockPlus.enable();
+    } else {
+      WakelockPlus.disable();
+    }
     _saveSettings();
   }
 

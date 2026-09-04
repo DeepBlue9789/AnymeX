@@ -1,18 +1,32 @@
 import 'package:anymex/controllers/service_handler/params.dart';
 import 'package:anymex/controllers/service_handler/service_handler.dart';
+import 'package:anymex/controllers/services/anilist/compatibility_controller.dart';
+import 'package:anymex/controllers/watchium/watchium_service.dart';
+import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/screens/anime/details_page.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/setup/player_control_theme_registry.dart';
 import 'package:anymex/screens/manga/details_page.dart';
+import 'package:anymex/screens/profile/compatibility/compatibility_result_page.dart';
+import 'package:anymex/screens/watchium/watchium_page.dart';
 import 'package:anymex/utils/function.dart';
+import 'package:anymex/utils/logger.dart';
 import 'package:anymex/widgets/non_widgets/snackbar.dart';
+import 'package:anymex/widgets/watchium/watchium_server_sheet.dart';
 import 'package:anymex_extension_runtime_bridge/ExtensionManager.dart';
 import 'package:anymex_extension_runtime_bridge/Models/Source.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 class Deeplink {
   static Future<void> handleDeepLink(Uri uri) async {
     print("HANDLING DEEEPLIINK => ${uri.toString()}");
+
+    if (uri.host == 'callback' ||
+        uri.path.contains('callback') ||
+        uri.queryParameters.containsKey('code')) {
+      return;
+    }
 
     final extensionManager = Get.find<ExtensionManager>();
     int attempts = 0;
@@ -29,6 +43,16 @@ class Deeplink {
       return;
     }
 
+    if (_isWatchiumDeepLink(uri)) {
+      _handleWatchiumDeepLink(uri);
+      return;
+    }
+
+    if (_isAnimatchDeepLink(uri)) {
+      _handleAnimatchDeepLink(uri);
+      return;
+    }
+
     final mediaTarget = _parseMediaTarget(uri);
     if (mediaTarget != null) {
       _openMediaTarget(mediaTarget);
@@ -40,7 +64,11 @@ class Deeplink {
     }
 
     bool isRepoAdded = false;
-    snackBar("Adding repo... please wait.");
+    if (uri.scheme.toLowerCase() == 'kotatsu') {
+      snackBar("Adding Kotatsu repository. This will take at least 1-2 minutes, please wait...");
+    } else {
+      snackBar("Adding repo... please wait.");
+    }
     final manager = extensionManager.managers;
     for (final handler in manager) {
       print('Matching ${uri.scheme} with ${handler.schemes.toString()}');
@@ -346,6 +374,187 @@ class Deeplink {
 
   static String? _extractNumericId(String raw) {
     return RegExp(r'\d+').firstMatch(raw)?.group(0);
+  }
+
+  // ---- Watchium Deep Link ----
+
+  static bool _isWatchiumDeepLink(Uri uri) {
+    if (uri.host.toLowerCase() != 'watchium') return false;
+    final segments = _compactSegments(uri.pathSegments);
+    return segments.isNotEmpty && segments.first.toLowerCase() == 'join';
+  }
+
+  static Future<void> _handleWatchiumDeepLink(Uri uri) async {
+    final segments = _compactSegments(uri.pathSegments);
+    Logger.i('Watchium deep link: $uri', 'DEEPLINK');
+    // URI: anymex://watchium/join/ABC123
+    if (segments.length < 2) {
+      Logger.w('Watchium deep link: invalid segments $segments', 'DEEPLINK');
+      errorSnackBar('Invalid Watch Together link');
+      return;
+    }
+
+    final code = segments[1].toUpperCase();
+    if (code.length != 6) {
+      Logger.w('Watchium deep link: invalid code length ${code.length}', 'DEEPLINK');
+      errorSnackBar('Invalid room code in link');
+      return;
+    }
+
+    Logger.d('Watchium deep link: parsed code=$code', 'DEEPLINK');
+
+    // Wait for WatchiumService to be registered
+    int attempts = 0;
+    while (!Get.isRegistered<WatchiumService>() && attempts < 50) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      attempts++;
+    }
+
+    if (!Get.isRegistered<WatchiumService>()) {
+      Logger.w('Watchium deep link: WatchiumService not registered after waiting', 'DEEPLINK');
+      errorSnackBar('App is still loading, try again shortly.');
+      return;
+    }
+
+    // On cold start, auth services may not have loaded saved login state yet.
+    // Wait for the user to be authenticated before attempting login/join.
+    if (!Get.isRegistered<ServiceHandler>()) {
+      Logger.w('Watchium deep link: ServiceHandler not registered', 'DEEPLINK');
+      errorSnackBar('App is still loading, try again shortly.');
+      return;
+    }
+
+    final serviceHandler = Get.find<ServiceHandler>();
+    attempts = 0;
+    while (!serviceHandler.isLoggedIn.value && attempts < 75) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      attempts++;
+    }
+
+    if (!serviceHandler.isLoggedIn.value) {
+      Logger.w('Watchium deep link: user not logged in after waiting', 'DEEPLINK');
+      errorSnackBar('Please log in first, then try the link again.');
+      return;
+    }
+
+    final watchium = Get.find<WatchiumService>();
+    successSnackBar('Joining room $code...');
+
+    // First get room info to navigate to the anime
+    final roomInfo = await watchium.getRoomInfo(code);
+    Logger.d('Watchium deep link: roomInfo=${roomInfo != null ? "found" : "null"}', 'DEEPLINK');
+
+    if (roomInfo == null) {
+      Logger.w('Watchium deep link: room not found or expired', 'DEEPLINK');
+      errorSnackBar('Room not found or expired');
+      return;
+    }
+
+    // Navigate to Watch Together page which shows the joined room
+    navigate(() => const WatchiumPage());
+
+    // Join the room
+    final ok = await watchium.handleDeepLinkJoin(code);
+    if (!ok) {
+      final err = watchium.error.value;
+      Logger.w('Watchium deep link: join failed: $err', 'DEEPLINK');
+      errorSnackBar('Failed to join room: $err');
+    } else {
+      Logger.i('Watchium deep link: joined room $code successfully', 'DEEPLINK');
+      successSnackBar('Joined room $code!');
+      // Wait for room state to populate from socket
+      await Future.delayed(const Duration(milliseconds: 1500));
+      final rs = watchium.roomState.value;
+      final content = rs?.content;
+      if (content != null && content.availableServers.isNotEmpty && Get.context != null) {
+        showWatchiumServerSheet(context: Get.context!, content: content);
+      }
+    }
+  }
+
+  static bool _isAnimatchDeepLink(Uri uri) {
+    final host = uri.host.toLowerCase();
+    const validKeywords = {'animatch', 'almatch', 'compat', 'compatibility'};
+    if (validKeywords.contains(host)) return true;
+
+    final segments = _compactSegments(uri.pathSegments);
+    if (segments.isNotEmpty && validKeywords.contains(segments.first.toLowerCase())) {
+      return true;
+    }
+
+    final watchiumUrl = (dotenv.env['WATCHIUM_SERVER_URL'] ?? WatchiumKeys.serverUrl.get<String>('')).trim();
+    if (watchiumUrl.isNotEmpty) {
+      final envUri = Uri.tryParse(watchiumUrl);
+      if (envUri != null && envUri.host.isNotEmpty && host == envUri.host.toLowerCase()) {
+        if (segments.isNotEmpty && validKeywords.contains(segments.first.toLowerCase())) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  static Future<void> _handleAnimatchDeepLink(Uri uri) async {
+    String? user1 = uri.queryParameters['user1'] ??
+        uri.queryParameters['u1'] ??
+        uri.queryParameters['username1'] ??
+        uri.queryParameters['user'];
+    String? user2 = uri.queryParameters['user2'] ??
+        uri.queryParameters['u2'] ??
+        uri.queryParameters['username2'];
+
+    final segments = _compactSegments(uri.pathSegments);
+    if (user1 == null || user2 == null) {
+      const keywords = {'animatch', 'almatch', 'compat', 'compatibility'};
+      final meaningful = segments.where((s) => !keywords.contains(s.toLowerCase())).toList();
+
+      if (meaningful.length >= 2) {
+        user1 ??= meaningful[0];
+        user2 ??= meaningful[1];
+      } else if (meaningful.length == 1 && meaningful[0].contains('&')) {
+        final parts = meaningful[0].split('&');
+        if (parts.length >= 2) {
+          user1 ??= parts[0];
+          user2 ??= parts[1];
+        }
+      }
+    }
+
+    user1 = user1?.trim();
+    user2 = user2?.trim();
+
+    if (user1 == null || user1.isEmpty || user2 == null || user2.isEmpty) {
+      errorSnackBar('Invalid compatibility link: missing usernames.');
+      return;
+    }
+
+    if (user1.toLowerCase() == user2.toLowerCase()) {
+      errorSnackBar('Cannot compare the same profile with itself.');
+      return;
+    }
+
+    snackBar('Calculating AniMatch compatibility for $user1 & $user2...');
+
+    final controller = Get.isRegistered<CompatibilityController>()
+        ? Get.find<CompatibilityController>()
+        : Get.put(CompatibilityController());
+
+    await controller.runMatch(
+      userName1: user1,
+      userName2: user2,
+      useLoggedInUser: false,
+    );
+
+    if (controller.errorMessage.value.isNotEmpty) {
+      errorSnackBar(controller.errorMessage.value);
+      return;
+    }
+
+    if (controller.result.value != null) {
+      navigate(() => CompatibilityResultPage(controller: controller));
+    } else {
+      errorSnackBar('Could not calculate compatibility.');
+    }
   }
 }
 

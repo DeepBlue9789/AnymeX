@@ -1,8 +1,8 @@
 import 'package:anymex/models/Anilist/anilist_profile.dart';
 import 'package:anymex/screens/profile/widgets/profile_common.dart';
 import 'package:anymex/screens/profile/widgets/hover_action_button.dart';
-import 'package:anymex/widgets/custom_widgets/anymex_image.dart';
-import 'package:anymex/widgets/custom_widgets/fullscreen_image_viewer.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_image.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_fullscreen_image_viewer.dart';
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +11,9 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
+import 'package:anymex/screens/profile/compatibility/compatibility_input_page.dart';
+import 'package:anymex/utils/function.dart';
 
 class UserProfileHeader extends StatefulWidget {
   final Profile user;
@@ -81,7 +84,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                         Navigator.of(context, rootNavigator: true)
                             .push(
                           MaterialPageRoute(
-                            builder: (_) => FullscreenImageViewer(
+                            builder: (_) => AnymeXFullscreenImageViewer(
                               imageUrl: imageUrl,
                               tag: 'profile_banner_$name',
                             ),
@@ -205,7 +208,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
+                              AnymeXText(
                                 name,
                                 style: TextStyle(
                                   fontSize: 28,
@@ -251,7 +254,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                                                   color: Color(0xFFE85D75)),
                                               const SizedBox(width: 4),
                                             ],
-                                            Text(
+                                            AnymeXText(
                                               badgeText,
                                               style: TextStyle(
                                                 fontSize: 10,
@@ -283,7 +286,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                                                   size: 12,
                                                   color: Colors.white70),
                                               const SizedBox(width: 4),
-                                              Text(
+                                              AnymeXText(
                                                 'Joined ${DateTime.fromMillisecondsSinceEpoch(user.createdAt! * 1000).year}',
                                                 style: const TextStyle(
                                                   fontSize: 10,
@@ -308,6 +311,15 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                         padding: const EdgeInsets.only(bottom: 15.0),
                         child: Row(
                           children: [
+                            HoverActionButton(
+                              icon: Iconsax.heart5,
+                              onTap: () => navigate(() => CompatibilityInputPage(
+                                    prefillProfile: widget.user,
+                                    prefillUsername: name,
+                                    useLoggedInUser: true,
+                                  )),
+                            ),
+                            const SizedBox(width: 10),
                             HoverActionButton(
                               icon: Icons.north_east_rounded,
                               onTap: () => launchUrlString(
@@ -347,7 +359,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                                             ),
                                           ),
                                           const SizedBox(height: 16),
-                                          Text(
+                                          AnymeXText(
                                             'More Options',
                                             style: TextStyle(
                                               fontSize: 18,
@@ -392,7 +404,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                                                 ScaffoldMessenger.of(context)
                                                     .showSnackBar(
                                                   SnackBar(
-                                                    content: const Text(
+                                                    content: const AnymeXText(
                                                         'User ID copied to clipboard'),
                                                     backgroundColor: context
                                                         .theme
@@ -403,6 +415,19 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                                                   ),
                                                 );
                                               }
+                                            },
+                                          ),
+                                          buildProfileSheetOption(
+                                            ctx,
+                                            icon: Iconsax.heart4,
+                                            label: 'Check Compatibility',
+                                            onTap: () {
+                                              Navigator.pop(ctx);
+                                              navigate(() => CompatibilityInputPage(
+                                                prefillProfile: widget.user,
+                                                prefillUsername: name,
+                                                useLoggedInUser: true,
+                                              ));
                                             },
                                           ),
                                         ],
@@ -519,7 +544,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
                                                     : Colors.white),
                                           ),
                                         const SizedBox(width: 8),
-                                        Text(
+                                        AnymeXText(
                                           (_isFollowHovered &&
                                                   widget.isFollowingUser ==
                                                       true)

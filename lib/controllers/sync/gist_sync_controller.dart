@@ -153,6 +153,7 @@ class GistSyncController extends GetxController {
         githubUsername.value = username.isEmpty ? null : username;
         Logger.i('[GistSync] Session restored for $username');
         unawaited(_fetchGithubProfile(token));
+        unawaited(refreshCloudGistStatus());
       }
     } catch (e) {
       Logger.i('[GistSync] _restoreSession: $e');

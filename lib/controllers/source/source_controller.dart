@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:anymex/controllers/cacher/cache_controller.dart';
 import 'package:anymex/controllers/service_handler/params.dart';
@@ -9,12 +10,13 @@ import 'package:anymex/database/isar_models/offline_media.dart';
 import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/models/Service/base_service.dart';
 import 'package:anymex/screens/search/source_search_page.dart';
+import 'package:anymex/screens/settings/sub_settings/settings_extension_manager.dart';
 import 'package:anymex/utils/extension_utils.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex/utils/logger.dart';
-import 'package:anymex/utils/string_extensions.dart';
 import 'package:anymex/widgets/common/search_bar.dart';
 import 'package:anymex/widgets/non_widgets/snackbar.dart';
+import 'package:anymex/screens/extensions/widgets/plugin_manager.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart'
     hide isar;
 import 'package:anymex_extension_runtime_bridge/Services/Aniyomi/Models/Source.dart';
@@ -45,6 +47,8 @@ class SourceController extends GetxController implements BaseService {
   final activeMangaSource = Rxn<Source>();
   final activeNovelSource = Rxn<Source>();
   final lastUpdatedSource = ''.obs;
+  final RxInt extensionUpdatesCount = 0.obs;
+  final RxSet<String> updatingSourceIds = <String>{}.obs;
 
   final Map<String, String> _activeTokens = {};
 
@@ -122,8 +126,10 @@ class SourceController extends GetxController implements BaseService {
 
     bool isSorted = true;
     for (int i = 0; i < current.length - 1; i++) {
-      final aIdx = orderMap[current[i].id?.toString() ?? ''] ?? orderedIds.length;
-      final bIdx = orderMap[current[i + 1].id?.toString() ?? ''] ?? orderedIds.length;
+      final aIdx =
+          orderMap[current[i].id?.toString() ?? ''] ?? orderedIds.length;
+      final bIdx =
+          orderMap[current[i + 1].id?.toString() ?? ''] ?? orderedIds.length;
       if (aIdx > bIdx) {
         isSorted = false;
         break;
@@ -205,19 +211,21 @@ class SourceController extends GetxController implements BaseService {
   void onInit() {
     super.onInit();
 
-   
     _loadExtensionOrders();
 
     ever(installedExtensions, (_) {
-      _applyOrderToInstalledList(ItemType.anime, _extensionOrders[ItemType.anime] ?? []);
+      _applyOrderToInstalledList(
+          ItemType.anime, _extensionOrders[ItemType.anime] ?? []);
       _scheduleRebuild(ItemType.anime);
     });
     ever(installedMangaExtensions, (_) {
-      _applyOrderToInstalledList(ItemType.manga, _extensionOrders[ItemType.manga] ?? []);
+      _applyOrderToInstalledList(
+          ItemType.manga, _extensionOrders[ItemType.manga] ?? []);
       _scheduleRebuild(ItemType.manga);
     });
     ever(installedNovelExtensions, (_) {
-      _applyOrderToInstalledList(ItemType.novel, _extensionOrders[ItemType.novel] ?? []);
+      _applyOrderToInstalledList(
+          ItemType.novel, _extensionOrders[ItemType.novel] ?? []);
       _scheduleRebuild(ItemType.novel);
     });
 
@@ -236,9 +244,13 @@ class SourceController extends GetxController implements BaseService {
         ServicesType.extensions) {
       fetchHomePage();
     }
-    if (Get.context != null) {
-      checkForUpdates(Get.context!);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 3), () {
+        unawaited(checkForUpdates());
+        unawaited(_refreshRepos());
+        unawaited(checkBridgeUpdate());
+      });
+    });
   }
 
   void _scheduleRebuild(ItemType type) {
@@ -281,6 +293,7 @@ class SourceController extends GetxController implements BaseService {
       _loadExtensionOrders();
       _restoreActiveSources();
       _refreshVisibility();
+      unawaited(checkForUpdates());
     } catch (e) {
       Logger.i('Error initializing extensions: $e');
     }
@@ -300,7 +313,8 @@ class SourceController extends GetxController implements BaseService {
     for (final s in list) {
       if (s.id?.toString() == id) return s;
       if (s is ASource && s.langs != null) {
-        final sub = s.langs!.firstWhereOrNull((subSource) => subSource.id?.toString() == id);
+        final sub = s.langs!
+            .firstWhereOrNull((subSource) => subSource.id?.toString() == id);
         if (sub != null) return sub;
       }
     }
@@ -309,19 +323,15 @@ class SourceController extends GetxController implements BaseService {
 
   Source? _restore(RxList<Source> list, SourceKeys key) {
     final id = KvHelper.get<String>(key.name, defaultVal: '');
-    final itemType = list.firstOrNull?.itemType;
-    
-    if (id.isEmpty) {
-      return itemType != null ? applyCustomOrder(itemType, list).firstOrNull : list.firstOrNull;
-    }
+    if (id.isEmpty) return list.firstOrNull;
 
+    final itemType = list.firstOrNull?.itemType;
     if (itemType != null) {
       final restored = findSourceById(id, itemType);
       if (restored != null) return restored;
-      return applyCustomOrder(itemType, list).firstOrNull;
     }
-    
-    return list.firstWhereOrNull((s) => s.id?.toString() == id) ?? list.firstOrNull;
+    return list.firstWhereOrNull((s) => s.id?.toString() == id) ??
+        list.firstOrNull;
   }
 
   void setActiveSource(Source source, {String? mediaId}) {
@@ -404,7 +414,8 @@ class SourceController extends GetxController implements BaseService {
         if (s is ASource && s.langs != null) {
           final sub = s.langs!.firstWhereOrNull((subSource) =>
               subSource.id?.toString() == name ||
-              '${subSource.name}-${subSource.lang?.toUpperCase()}-${subSource.runtimeType}' == name ||
+              '${subSource.name}-${subSource.lang?.toUpperCase()}-${subSource.runtimeType}' ==
+                  name ||
               subSource.name == name);
           if (sub != null) {
             match = sub;
@@ -459,33 +470,45 @@ class SourceController extends GetxController implements BaseService {
     if (type == null) return;
 
     final managerId = getSourceManager(source).id;
-    await _bridge.refreshManagerType(managerId, type);
+    await _bridge.refreshManagerType(managerId, type,
+        refreshAvailableSource: false);
     await initExtensions();
   }
 
   @override
   RxList<Widget> animeWidgets(BuildContext context) =>
-      [Obx(() => Column(children: _animeSections.value))].obs;
+      [Obx(() => Column(children: _animeSections))].obs;
 
   @override
-  RxList<Widget> homeWidgets(BuildContext context) =>
-      [Obx(() => Column(children: _homeSections.value))].obs;
+  RxList<Widget> homeWidgets(BuildContext context) => [
+        Obx(() => Column(children: _homeSections.value))
+      ].obs;
 
   @override
   RxList<Widget> mangaWidgets(BuildContext context) => [
-        Obx(() =>
-            Column(children: [..._mangaSections.value, ...novelSections.value]))
+        Obx(() => Column(children: [..._mangaSections, ...novelSections]))
       ].obs;
+
+  @override
+  RxList<Widget> novelWidgets(BuildContext context) =>
+      [Obx(() => Column(children: novelSections))].obs;
+
+  @override
+  bool get isDataLoaded => _homeReady;
+
+  @override
+  void clearState() {
+    novelSections.clear();
+    _animeSections.clear();
+    _mangaSections.clear();
+    _homeSections.clear();
+  }
 
   @override
   Future<void> fetchHomePage() async {
     try {
       _buildOfflineSections();
       _homeReady = true;
-
-      for (final type in ItemType.values) {
-        _syncSections(type);
-      }
     } catch (e) {
       Logger.i('Error in fetchHomePage: $e');
       errorSnackBar('Failed to fetch data from sources.');
@@ -521,40 +544,7 @@ class SourceController extends GetxController implements BaseService {
   }
 
   void _syncSections(ItemType type) {
-    final sources = _installedFor(type);
-    final cache = _widgetCache[type]!;
-    final sections = _sectionsFor(type);
-
-    final liveIds = {for (final s in sources) s.id};
-    final cachedIds = cache.keys.toSet();
-
-    final added = liveIds.difference(cachedIds);
-    final removed = cachedIds.difference(liveIds);
-
-    if (added.isEmpty && removed.isEmpty) return;
-
-    for (final id in removed) {
-      cache.remove(id);
-    }
-
-    for (final src in sources.where((s) => added.contains(s.id))) {
-      cache[src.id?.toInt() ?? 0] = buildFutureSection(
-        src.name ?? '??',
-        src.methods.getPopular(1).then((r) => r.list),
-        type: type,
-        variant: DataVariant.extension,
-        source: src,
-      );
-    }
-
-    sections.value = [
-      if (cache.isNotEmpty && type != ItemType.novel)
-        CustomSearchBar(
-          disableIcons: true,
-          onSubmitted: (v) => SourceSearchPage(initialTerm: v, type: type).go(),
-        ),
-      ...cache.values,
-    ];
+    return;
   }
 
   Future<void> initNovelExtensions() async {
@@ -571,7 +561,8 @@ class SourceController extends GetxController implements BaseService {
     if (serviceHandler.serviceType.value != ServicesType.extensions) {
       cacheController.addCache(data.toJson());
     }
-    return Media.froDMedia(data, isAnime ? ItemType.anime : ItemType.manga);
+    return Media.froDMedia(data, isAnime ? ItemType.anime : ItemType.manga)
+      ..sourceId = source.id;
   }
 
   @override
@@ -581,22 +572,101 @@ class SourceController extends GetxController implements BaseService {
     final type = params.isManga ? ItemType.manga : ItemType.anime;
     return (await source!.methods.search(params.query, params.page, []))
         .list
-        .map((e) => Media.froDMedia(e, type))
+        .map((e) => Media.froDMedia(e, type)..sourceId = source.id)
         .toList();
   }
 
-  Future<void> checkForUpdates(BuildContext context) async {
-    try {
-      // await _bridge.checkForUpdates();
-      final updatesCount = [
-        ...availableExtensions,
-        ...availableMangaExtensions,
-        ...availableNovelExtensions
-      ].where((s) => (s.hasUpdate ?? false)).length;
+  bool isExtensionNewerVersion(String? installed, String? latest) {
+    if (installed == null || latest == null) return false;
+    if (installed.isEmpty || latest.isEmpty) return false;
 
-      if (updatesCount > 0) {
-        snackString("Updates available for $updatesCount extensions");
+    String clean(String v) =>
+        v.toLowerCase().replaceAll(RegExp(r'[^0-9.]'), '');
+    final installedClean = clean(installed);
+    final latestClean = clean(latest);
+
+    if (installedClean.isEmpty || latestClean.isEmpty) return false;
+
+    final installedParts =
+        installedClean.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final latestParts =
+        latestClean.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    final maxLength = installedParts.length > latestParts.length
+        ? installedParts.length
+        : latestParts.length;
+
+    for (var index = 0; index < maxLength; index++) {
+      final installedPart =
+          index < installedParts.length ? installedParts[index] : 0;
+      final latestPart = index < latestParts.length ? latestParts[index] : 0;
+
+      if (latestPart > installedPart) return true;
+      if (latestPart < installedPart) return false;
+    }
+    return false;
+  }
+
+  bool extensionHasUpdate(Source source) {
+    if (source.hasUpdate == true) return true;
+    final type = source.itemType;
+    if (type == null) return false;
+    final availableList = getAvailableExtensions(type);
+    final pkgName = source is ASource ? source.pkgName : null;
+    final available = availableList.firstWhereOrNull((s) {
+      if (s.runtimeType != source.runtimeType) return false;
+      if (pkgName != null &&
+          pkgName.isNotEmpty &&
+          s is ASource &&
+          s.pkgName == pkgName) {
+        return true;
       }
+      if (s.id?.toString() == source.id?.toString() &&
+          s.id != null &&
+          s.id!.isNotEmpty) {
+        return true;
+      }
+      return s.name != null && s.name!.isNotEmpty && s.name == source.name;
+    });
+    if (available == null) return false;
+    return isExtensionNewerVersion(source.version, available.version);
+  }
+
+  Future<void> checkBridgeUpdate() async {
+    try {
+      if (Platform.isAndroid &&
+          await AnymeXRuntimeBridge.isLoadedFromStorage()) {
+        return;
+      }
+      final manager = PluginManager();
+      final latestRelease = await manager.fetchLatestRelease();
+      if (latestRelease != null) {
+        final installed = manager.installedVersion;
+        if (installed.isNotEmpty &&
+            manager.isNewerVersion(installed, latestRelease.tagName)) {
+          infoSnackBar(
+            "Extension Bridge has an update available (${latestRelease.tagName})",
+            title: "Bridge Update Available",
+            onTap: () {
+              navigate(() => const SettingsExtensionManager());
+            },
+          );
+        }
+      }
+    } catch (e) {
+      Logger.e('Error checking for bridge updates on startup: $e');
+    }
+  }
+
+  Future<void> checkForUpdates() async {
+    try {
+      final updatesCount = [
+        ...installedExtensions,
+        ...installedMangaExtensions,
+        ...installedNovelExtensions
+      ].where((s) => extensionHasUpdate(s)).length;
+
+      extensionUpdatesCount.value = updatesCount;
     } catch (e) {
       Logger.e('Error checking for updates: $e');
     }

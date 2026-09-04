@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:anymex/controllers/watchium/watchium_service.dart';
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/control_button.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/decoder_quick_button.dart';
@@ -11,6 +12,16 @@ import 'package:flutter/services.dart';
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/common/marquee_text.dart';
 import 'package:get/get.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
+
+Future<void> _handleBack() async {
+  final ctx = Get.context;
+  if (ctx == null) return;
+  final shouldClose = await WatchiumService.confirmAndLeave(ctx);
+  if (shouldClose) {
+    Get.back();
+  }
+}
 
 class TopControls extends StatelessWidget {
   final bool enableBlur;
@@ -28,18 +39,13 @@ class TopControls extends StatelessWidget {
 
     return Obx(() {
       if (controller.isLocked.value) {
-        final show = controller.showControls.value;
-        return AnimatedOpacity(
-          opacity: show ? 1.0 : 0.0,
-          duration: controller.overlayAnimationDuration(300),
-          child: IgnorePointer(
-            ignoring: !show,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _UnlockButton(
-                onUnlock: () => controller.isLocked.value = false,
-              ),
-            ),
+        if (!controller.showControls.value) {
+          return const SizedBox.shrink();
+        }
+        return Align(
+          alignment: Alignment.centerRight,
+          child: _UnlockButton(
+            onUnlock: () => controller.isLocked.value = false,
           ),
         );
       }
@@ -66,7 +72,12 @@ class TopControls extends StatelessWidget {
                   ],
                 ),
               ),
-              child: _buildContent(theme, isDesktop),
+              child: enableBlur
+                  ? BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: _buildContent(theme, isDesktop),
+                    )
+                  : _buildContent(theme, isDesktop),
             ),
           ),
         ),
@@ -104,7 +115,7 @@ class TopControls extends StatelessWidget {
         children: [
           ControlButton(
             icon: Icons.arrow_back_ios_rounded,
-            onPressed: () => controller.handleBack(),
+            onPressed: () => _handleBack(),
             tooltip: 'Back',
             isPrimary: true,
           ),
@@ -117,7 +128,7 @@ class TopControls extends StatelessWidget {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(
+                      child: AnymeXText(
                         controller.currentEpisode.value.title ??
                             controller.itemName ??
                             'Unknown Title',
@@ -131,8 +142,12 @@ class TopControls extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    10.width(),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
                     Flexible(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -143,7 +158,35 @@ class TopControls extends StatelessWidget {
                               : theme.colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
+                        child: AnymeXText(
+                          (controller.anilistData.title == "?"
+                                  ? controller.folderName
+                                  : controller.anilistData.title) ??
+                              '',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: isDark
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    if (!controller.isOffline.value) ...[
+                      6.width(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? theme.colorScheme.primary.opaque(0.15)
+                              : theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: AnymeXText(
                           controller.currentEpisode.value.number == "Offline"
                               ? "Offline"
                               : "Episode ${controller.currentEpisode.value.number}",
@@ -157,40 +200,17 @@ class TopControls extends StatelessWidget {
                           maxLines: 1,
                         ),
                       ),
+                    ],
+                    6.width(),
+                    Obx(
+                      () => _QualityChip(
+                          videoHeight: controller.videoHeight.value,
+                          isMobile: true),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? theme.colorScheme.primary.opaque(0.15)
-                        : theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    (controller.anilistData.title == "?"
-                            ? controller.folderName
-                            : controller.anilistData.title) ??
-                        '',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: isDark
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
               ],
             ),
-          ),
-          const SizedBox(width: 16),
-          Obx(
-            () => _QualityChip(
-                videoHeight: controller.videoHeight.value, isMobile: true),
           ),
           const SizedBox(width: 8),
           const DecoderQuickButton(isMobile: true),
@@ -202,9 +222,9 @@ class TopControls extends StatelessWidget {
             compact: true,
           ),
           const SizedBox(width: 8),
-          if (Platform.isAndroid)
+          if (Platform.isAndroid || Platform.isIOS)
             ControlButton(
-              icon: Icons.picture_in_picture_alt_rounded,
+              icon: Icons.picture_in_picture_rounded,
               onPressed: () => controller.enterPip(),
               tooltip: 'Picture in Picture',
               compact: true,
@@ -219,31 +239,12 @@ class TopControls extends StatelessWidget {
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (context) => Container(
-                          margin: EdgeInsets.fromLTRB(
-                              16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-                          height: MediaQuery.of(context).size.height * 0.85,
+                          height: MediaQuery.sizeOf(context).height,
                           clipBehavior: Clip.antiAlias,
-                          decoration: BoxDecoration(
-                            color: context.theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: context.theme.colorScheme.outline
-                                  .opaque(0.2, iReallyMeanIt: true),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: context.theme.colorScheme.primary
-                                    .opaque(0.12, iReallyMeanIt: true),
-                                blurRadius: 24,
-                                offset: const Offset(0, 4),
-                              ),
-                              BoxShadow(
-                                color: Colors.black.opaque(0.35, iReallyMeanIt: true),
-                                blurRadius: 32,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
+                          decoration: const BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius:
+                                BorderRadius.vertical(top: Radius.circular(28)),
                           ),
                           child: const SettingsPlayer(
                             isModal: true,
@@ -272,7 +273,7 @@ class TopControls extends StatelessWidget {
               children: [
                 ControlButton(
                   icon: Icons.arrow_back_ios_rounded,
-                  onPressed: () => controller.handleBack(),
+                  onPressed: () => _handleBack(),
                   tooltip: 'Back',
                   isPrimary: true,
                 ),
@@ -285,7 +286,7 @@ class TopControls extends StatelessWidget {
                       Row(
                         children: [
                           Flexible(
-                            child: Text(
+                            child: AnymeXText(
                               controller.currentEpisode.value.title ??
                                   controller.itemName ??
                                   'Unknown Title',
@@ -300,57 +301,71 @@ class TopControls extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          10.width(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? theme.colorScheme.primary.opaque(0.15)
-                                  : theme.colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              controller.currentEpisode.value.number ==
-                                      "Offline"
-                                  ? "Offline"
-                                  : "Episode ${controller.currentEpisode.value.number}",
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: isDark
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? theme.colorScheme.primary.opaque(0.15)
-                              : theme.colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          (controller.anilistData.title == "?"
-                                  ? controller.folderName
-                                  : controller.anilistData.title) ??
-                              '',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isDark
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onPrimaryContainer,
-                            fontWeight: FontWeight.w600,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? theme.colorScheme.primary.opaque(0.15)
+                                    : theme.colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: AnymeXText(
+                                (controller.anilistData.title == "?"
+                                        ? controller.folderName
+                                        : controller.anilistData.title) ??
+                                    '',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: isDark
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          if (!controller.isOffline.value) ...[
+                            6.width(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? theme.colorScheme.primary.opaque(0.15)
+                                    : theme.colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: AnymeXText(
+                                controller.currentEpisode.value.number ==
+                                        "Offline"
+                                    ? "Offline"
+                                    : "Episode ${controller.currentEpisode.value.number}",
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: isDark
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                          6.width(),
+                          Obx(
+                            () => _QualityChip(
+                                videoHeight: controller.videoHeight.value,
+                                isMobile: false),
+                          ),
+                        ],
                       )
                     ],
                   ),
@@ -358,10 +373,6 @@ class TopControls extends StatelessWidget {
               ],
             ),
           ),
-        ),
-        Obx(
-          () => _QualityChip(
-              videoHeight: controller.videoHeight.value, isMobile: false),
         ),
         const SizedBox(width: 8),
         const DecoderQuickButton(isMobile: false),
@@ -399,31 +410,12 @@ class TopControls extends StatelessWidget {
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
                         builder: (context) => Container(
-                              margin: EdgeInsets.fromLTRB(
-                                  16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-                              height: MediaQuery.of(context).size.height * 0.85,
+                              height: MediaQuery.sizeOf(context).height,
                               clipBehavior: Clip.antiAlias,
-                              decoration: BoxDecoration(
-                                color: context.theme.colorScheme.surface,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                  color: context.theme.colorScheme.outline
-                                      .opaque(0.2, iReallyMeanIt: true),
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: context.theme.colorScheme.primary
-                                        .opaque(0.12, iReallyMeanIt: true),
-                                    blurRadius: 24,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                  BoxShadow(
-                                    color: Colors.black.opaque(0.35, iReallyMeanIt: true),
-                                    blurRadius: 32,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
+                              decoration: const BoxDecoration(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(28)),
                               ),
                               child: const SettingsPlayer(
                                 isModal: true,
@@ -463,7 +455,7 @@ class TopControls extends StatelessWidget {
             children: [
               ControlButton(
                 icon: Icons.arrow_back_ios_rounded,
-                onPressed: () => controller.handleBack(),
+                onPressed: () => _handleBack(),
                 tooltip: 'Back',
                 isPrimary: true,
               ),
@@ -480,6 +472,14 @@ class TopControls extends StatelessWidget {
                 compact: true,
               ),
               const SizedBox(width: 8),
+              if (Platform.isAndroid || Platform.isIOS)
+                ControlButton(
+                  icon: Icons.picture_in_picture_rounded,
+                  onPressed: () => controller.enterPip(),
+                  tooltip: 'Picture in Picture',
+                  compact: true,
+                ),
+              const SizedBox(width: 8),
               ControlButton(
                 icon: Icons.settings_rounded,
                 onPressed: () {
@@ -489,31 +489,12 @@ class TopControls extends StatelessWidget {
                       isScrollControlled: true,
                       backgroundColor: Colors.transparent,
                       builder: (context) => Container(
-                        margin: EdgeInsets.fromLTRB(
-                            16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-                        height: MediaQuery.of(context).size.height * 0.85,
+                        height: MediaQuery.sizeOf(context).height,
                         clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: context.theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: context.theme.colorScheme.outline
-                                .opaque(0.2, iReallyMeanIt: true),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: context.theme.colorScheme.primary
-                                  .opaque(0.12, iReallyMeanIt: true),
-                              blurRadius: 24,
-                              offset: const Offset(0, 4),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.opaque(0.35, iReallyMeanIt: true),
-                              blurRadius: 32,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
+                        decoration: const BoxDecoration(
+                          color: Colors.transparent,
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(28)),
                         ),
                         child: const SettingsPlayer(isModal: true),
                       ),
@@ -529,55 +510,63 @@ class TopControls extends StatelessWidget {
           Row(
             children: [
               Expanded(child: MarqueeText(titleText, style: titleStyle)),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? theme.colorScheme.primary.opaque(0.15)
-                      : theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  controller.currentEpisode.value.number == "Offline"
-                      ? "Offline"
-                      : "Episode ${controller.currentEpisode.value.number}",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: isDark
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                  maxLines: 1,
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? theme.colorScheme.primary.opaque(0.15)
-                  : theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              (controller.anilistData.title == "?"
-                      ? controller.folderName
-                      : controller.anilistData.title) ??
-                  '',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: isDark
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+          Row(
+            children: [
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? theme.colorScheme.primary.opaque(0.15)
+                        : theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: AnymeXText(
+                    (controller.anilistData.title == "?"
+                            ? controller.folderName
+                            : controller.anilistData.title) ??
+                        '',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isDark
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+              if (!controller.isOffline.value) ...[
+                10.width(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? theme.colorScheme.primary.opaque(0.15)
+                        : theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: AnymeXText(
+                    controller.currentEpisode.value.number == "Offline"
+                        ? "Offline"
+                        : "Episode ${controller.currentEpisode.value.number}",
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isDark
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -618,7 +607,7 @@ class _QualityChip extends StatelessWidget {
             : theme.colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(isMobile ? 8 : 12),
       ),
-      child: Text(
+      child: AnymeXText(
         _qualityText,
         style:
             (isMobile ? theme.textTheme.bodySmall : theme.textTheme.bodyMedium)
@@ -697,7 +686,7 @@ class _UnlockButtonState extends State<_UnlockButton> {
               ),
               if (_confirm) ...[
                 const SizedBox(width: 8),
-                Text(
+                AnymeXText(
                   "Are you sure?",
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.primary,

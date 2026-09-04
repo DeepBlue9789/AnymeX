@@ -1,5 +1,6 @@
 import 'package:anymex/controllers/service_handler/service_handler.dart';
-import 'package:anymex/models/Media/media.dart';
+import 'package:anymex/controllers/settings/settings.dart';
+import 'package:get/get.dart';
 
 class TrackedMedia {
   String? id;
@@ -11,7 +12,6 @@ class TrackedMedia {
   String? rating;
   String? totalEpisodes;
   String? releasedEpisodes;
-  NextAiringEpisode? nextAiringEpisode;
   String? watchingStatus;
   String? format;
   String? mediaStatus;
@@ -28,20 +28,35 @@ class TrackedMedia {
   int? userProgress;
   double? userScore;
   List<String> genres;
+  List<String> tags;
   int? startYear;
   int? updatedAt;
+
+  String? romajiTitle;
+
+  String get displayTitle {
+    if (Get.isRegistered<Settings>() &&
+        Get.find<Settings>().useAlternateTitle.value) {
+      if (romajiTitle != null &&
+          romajiTitle!.trim().isNotEmpty &&
+          romajiTitle != '?') {
+        return romajiTitle!;
+      }
+    }
+    return title ?? '?';
+  }
 
   TrackedMedia({
     this.id,
     this.idMal,
     this.title,
+    this.romajiTitle,
     this.poster,
     this.episodeCount,
     this.chapterCount,
     this.rating,
     this.totalEpisodes,
     this.releasedEpisodes,
-    this.nextAiringEpisode,
     this.watchingStatus,
     this.format,
     this.mediaStatus,
@@ -55,6 +70,7 @@ class TrackedMedia {
     this.userProgress,
     this.userScore,
     this.genres = const [],
+    this.tags = const [],
     this.startYear,
     this.updatedAt,
     this.startedAt,
@@ -63,22 +79,23 @@ class TrackedMedia {
   });
 
   factory TrackedMedia.fromJson(Map<String, dynamic> json) {
+    final titleMap = json['media']?['title'];
     return TrackedMedia(
       id: json['media']['id']?.toString(),
       idMal: json['media']['idMal']?.toString(),
-      title: json['media']['title']['userPreferred'] ??
-          json['media']['title']['english'] ??
-          json['media']['title']['romaji'] ??
-          json['media']['title']['native'],
+      title: titleMap?['userPreferred'] ??
+          titleMap?['english'] ??
+          titleMap?['romaji'] ??
+          titleMap?['native'],
+      romajiTitle: titleMap?['romaji'] ??
+          titleMap?['userPreferred'] ??
+          titleMap?['english'],
       poster: json['media']['coverImage']['large'],
       episodeCount: json['progress']?.toString(),
       chapterCount: json['media']['chapters']?.toString(),
       totalEpisodes: json['media']['episodes']?.toString(),
       releasedEpisodes: json['media']['nextAiringEpisode'] != null
           ? (json['media']['nextAiringEpisode']['episode'] - 1).toString()
-          : null,
-      nextAiringEpisode: json['media']['nextAiringEpisode'] != null
-          ? NextAiringEpisode.fromJson(json['media']['nextAiringEpisode'])
           : null,
       rating:
           (double.tryParse(json['media']['averageScore']?.toString() ?? "0")! /
@@ -90,11 +107,17 @@ class TrackedMedia {
       score: json['score']?.toString(),
       type: json['media']['type']?.toString(),
       servicesType: ServicesType.anilist,
-      mediaListId:
-          (json['media']['mediaListEntry']?['id'] ?? json['media']['id'])
-              .toString(),
+      mediaListId: (json['id'] ??
+              json['media']?['mediaListEntry']?['id'] ??
+              json['media']?['id'])
+          ?.toString(),
       genres: (json['media']['genres'] as List<dynamic>?)
               ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      tags: (json['media']['tags'] as List<dynamic>?)
+              ?.map((e) => e is Map ? (e['name']?.toString() ?? '') : e.toString())
+              .where((s) => s.isNotEmpty)
               .toList() ??
           const [],
       startYear: json['media']['startDate']?['year'] as int?,
@@ -119,8 +142,19 @@ class TrackedMedia {
   }
 
   factory TrackedMedia.fromSimklShow(Map<String, dynamic> json) {
-    final show = json['show'];
+    final show = json['show'] ?? {};
     final ids = show['ids'] ?? {};
+    final rawDate = json['last_watched_at'] ?? json['user_updated_at'] ?? json['updated_at'];
+    final updatedTime = rawDate != null
+        ? (DateTime.tryParse(rawDate.toString())?.millisecondsSinceEpoch ?? 0)
+        : 0;
+    final year = int.tryParse(show['year']?.toString() ?? '') ?? 0;
+    final rawScore = json['user_rating'] ?? show['ratings']?['simkl']?['rating'];
+    final scoreStr = rawScore != null
+        ? (double.tryParse(rawScore.toString()) != null
+            ? (double.parse(rawScore.toString()) * 10).toString()
+            : null)
+        : null;
 
     return TrackedMedia(
       id: '${ids['simkl']}*SERIES',
@@ -129,22 +163,40 @@ class TrackedMedia {
           ? "https://wsrv.nl/?url=https://simkl.in/posters/${show['poster']}_m.jpg"
           : '?',
       episodeCount: json['watched_episodes_count']?.toString(),
-      totalEpisodes: json['total_episodes_count']?.toString(),
+      totalEpisodes: (json['total_episodes_count'] ??
+              json['total_episodes'] ??
+              json['episodes_count'] ??
+              json['episodes'])
+          ?.toString(),
       watchingStatus: Simkl.simklShowToAL(json['status']),
       type: "show",
       servicesType: ServicesType.simkl,
       mediaStatus:
           json['not_aired_episodes_count'] == 0 ? "completed" : "airing",
       rating: null,
-      score: json['user_rating']?.toString(),
+      score: scoreStr,
       format: null,
       mediaListId: '${ids['simkl']}*SERIES',
+      updatedAt: updatedTime,
+      startYear: year,
     );
   }
 
   factory TrackedMedia.fromSimklMovie(Map<String, dynamic> json) {
-    final show = json['movie'];
+    final show = json['movie'] ?? {};
     final ids = show['ids'] ?? {};
+    final rawDate = json['last_watched_at'] ?? json['user_updated_at'] ?? json['updated_at'];
+    final updatedTime = rawDate != null
+        ? (DateTime.tryParse(rawDate.toString())?.millisecondsSinceEpoch ?? 0)
+        : 0;
+    final year = int.tryParse(show['year']?.toString() ?? '') ?? 0;
+    final rawScore = json['user_rating'] ?? show['ratings']?['simkl']?['rating'];
+    final scoreStr = rawScore != null
+        ? (double.tryParse(rawScore.toString()) != null
+            ? (double.parse(rawScore.toString()) * 10).toString()
+            : null)
+        : null;
+
     return TrackedMedia(
       id: '${ids['simkl']}*MOVIE',
       title: show['title'],
@@ -160,9 +212,11 @@ class TrackedMedia {
       mediaStatus:
           json['not_aired_episodes_count'] == 0 ? "COMPLETED" : "AIRING",
       rating: null,
-      score: json['user_rating']?.toString(),
+      score: scoreStr,
       format: null,
       mediaListId: '${ids['simkl']}*MOVIE',
+      updatedAt: updatedTime,
+      startYear: year,
     );
   }
 
@@ -184,7 +238,9 @@ class TrackedMedia {
           '?',
       rating: json['node']?['mean']?.toString() ?? '?',
       watchingStatus: returnConvertedStatus(json['list_status']['status']),
-      score: json['list_status']['score']?.toString(),
+      score: json['list_status']['score'] != null
+          ? (json['list_status']['score'] * 10).toString()
+          : null,
       type: isMangaResolved ? 'MANGA' : 'ANIME',
       mediaListId: json['node']['id']?.toString(),
       startedAt: _parseMalDate(json['list_status']?['start_date']),
@@ -295,35 +351,52 @@ String getAniListStatusEquivalent(String status) {
 }
 
 String returnConvertedStatus(String status) {
-  switch (status) {
-    case 'watching' || 'reading':
+  switch (status.toLowerCase().trim()) {
+    case 'watching':
+    case 'reading':
       return 'CURRENT';
     case 'completed':
       return 'COMPLETED';
     case 'on_hold':
+    case 'on-hold':
+    case 'paused':
       return 'PAUSED';
     case 'dropped':
       return 'DROPPED';
-    case 'plan_to_watch' || 'plan_to_read':
+    case 'plan_to_watch':
+    case 'plan_to_read':
+    case 'planning':
       return 'PLANNING';
+    case 'repeating':
+    case 'rewatching':
+    case 'rereading':
+      return 'REPEATING';
     default:
       return 'ALL';
   }
 }
 
 String getMALStatusEquivalent(String status, {bool isAnime = true}) {
-  switch (status.toUpperCase()) {
+  switch (status.toUpperCase().replaceAll(' ', '_').replaceAll('-', '_')) {
     case 'CURRENT':
+    case 'WATCHING':
+    case 'READING':
+    case 'REPEATING':
+    case 'REWATCHING':
+    case 'REREADING':
       return isAnime ? 'watching' : 'reading';
     case 'COMPLETED':
       return 'completed';
     case 'PAUSED':
+    case 'ON_HOLD':
       return 'on_hold';
     case 'DROPPED':
       return 'dropped';
     case 'PLANNING':
+    case 'PLAN_TO_WATCH':
+    case 'PLAN_TO_READ':
       return isAnime ? 'plan_to_watch' : 'plan_to_read';
     default:
-      return 'unknown';
+      return isAnime ? 'plan_to_watch' : 'plan_to_read';
   }
 }

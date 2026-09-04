@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:anymex/controllers/sync/gist_sync_controller.dart';
-import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/utils/logger.dart';
 import 'package:anymex/utils/theme_extensions.dart';
-import 'package:anymex/widgets/custom_widgets/custom_text.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_bottomsheet.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_tile.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_dialog.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_section_builder.dart';
 import 'package:anymex/widgets/non_widgets/snackbar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -21,65 +24,7 @@ class ProgressSyncSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctrl = Get.find<GistSyncController>();
 
-    return Obx(() {
-      final activeProvider = ctrl.syncProvider.value;
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 12),
-          const AnymexText(
-            text: 'Sync Provider',
-            variant: TextVariant.bold,
-            size: 14,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _ProviderChip(
-                label: 'GitHub Gist',
-                icon: Icons.code_rounded,
-                isSelected: activeProvider == 'github',
-                onTap: () => ctrl.setSyncProvider('github'),
-              ),
-              const SizedBox(width: 8),
-              _ProviderChip(
-                label: 'PocketBase',
-                icon: Icons.dns_rounded,
-                isSelected: activeProvider == 'pocketbase',
-                onTap: () => ctrl.setSyncProvider('pocketbase'),
-              ),
-              const SizedBox(width: 8),
-              _ProviderChip(
-                label: 'Disabled',
-                icon: Icons.sync_disabled_rounded,
-                isSelected: activeProvider == 'none',
-                onTap: () => ctrl.setSyncProvider('none'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (activeProvider == 'github')
-            _GistSyncCard(ctrl: ctrl)
-          else if (activeProvider == 'pocketbase')
-            _PocketBaseSyncCard(ctrl: ctrl)
-          else
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: context.colors.surfaceContainerLow.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const AnymexText(
-                text: 'Cloud sync is currently disabled.',
-                variant: TextVariant.regular,
-                size: 13,
-              ),
-            ),
-        ],
-      );
-    });
+    return _GistSyncCard(ctrl: ctrl);
   }
 }
 
@@ -101,7 +46,7 @@ class _GistSyncCard extends StatelessWidget {
       final showExitSyncNotifications = ctrl.showExitSyncNotifications.value;
       final hasCloudGist = ctrl.hasCloudGist.value;
       final lastSyncSuccessful = ctrl.lastSyncSuccessful.value;
-      final needsInitialize = hasCloudGist != true;
+      final needsInitialize = hasCloudGist == false;
       final statusColor = _statusColor(
         colors,
         isLogged: isLogged,
@@ -151,8 +96,7 @@ class _GistSyncCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 14),
                       const Expanded(
-                        child: AnymexText(
-                          text: 'GitHub Gist Sync',
+                        child: AnymeXText('GitHub Gist Sync',
                           variant: TextVariant.semiBold,
                           size: 16,
                         ),
@@ -190,7 +134,7 @@ class _GistSyncCard extends StatelessWidget {
                               ),
                             )
                           : const Icon(Icons.login_rounded),
-                      label: Text(primaryActionLabel),
+                      label: AnymeXText(primaryActionLabel),
                     ),
                   ),
                 if (isLogged)
@@ -220,7 +164,7 @@ class _GistSyncCard extends StatelessWidget {
                                           ? Icons.cloud_upload_rounded
                                           : Icons.sync_rounded,
                                     ),
-                              label: Text(primaryActionLabel),
+                              label: AnymeXText(primaryActionLabel),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -234,48 +178,45 @@ class _GistSyncCard extends StatelessWidget {
                                       _showManageSheet(context, ctrl);
                                     },
                               icon: const Icon(Icons.tune_rounded),
-                              label: const Text('Manage'),
+                              label: const AnymeXText('Manage'),
                             ),
                           ),
                         ],
                       ),
                       if (hasCloudGist == true) ...[
-                        const SizedBox(height: 14),
-                        AnymexText(
-                          text: 'Sync Preferences',
-                          size: 12,
-                          variant: TextVariant.bold,
-                          color: colors.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 8),
-                        _SyncPreferenceTile(
-                          icon: Icons.sync_rounded,
-                          title: 'Auto-sync progress',
-                          subtitle:
-                              'While watching episodes or reading chapters',
-                          value: syncEnabled,
-                          onChanged: (v) => ctrl.syncEnabled.value = v,
-                        ),
-                        const SizedBox(height: 8),
-                        _SyncPreferenceTile(
-                          icon: Icons.auto_delete_rounded,
-                          title: 'Auto-delete completed entries',
-                          subtitle: 'Removes finished media from cloud gist',
-                          value: autoDeleteCompletedOnExit,
-                          onChanged: (v) {
-                            unawaited(ctrl.setAutoDeleteCompletedOnExit(v));
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        _SyncPreferenceTile(
-                          icon: Icons.notifications_active_outlined,
-                          title: 'Exit sync notifications',
-                          subtitle:
-                              'Show sync result when player or reader closes',
-                          value: showExitSyncNotifications,
-                          onChanged: (v) {
-                            unawaited(ctrl.setExitSyncNotifications(v));
-                          },
+                        AnymeXSectionBuilder(
+                          title: 'Sync Preferences',
+                          margin: const EdgeInsets.only(top: 14),
+                          children: [
+                            AnymeXTile.toggle(
+                              icon: Icons.sync_rounded,
+                              title: 'Auto-sync progress',
+                              subtitle:
+                                  'While watching episodes or reading chapters',
+                              value: syncEnabled,
+                              onChanged: (v) => ctrl.syncEnabled.value = v,
+                            ),
+                            AnymeXTile.toggle(
+                              icon: Icons.auto_delete_rounded,
+                              title: 'Auto-delete completed entries',
+                              subtitle:
+                                  'Removes finished media from cloud gist',
+                              value: autoDeleteCompletedOnExit,
+                              onChanged: (v) {
+                                unawaited(ctrl.setAutoDeleteCompletedOnExit(v));
+                              },
+                            ),
+                            AnymeXTile.toggle(
+                              icon: Icons.notifications_active_outlined,
+                              title: 'Exit sync notifications',
+                              subtitle:
+                                  'Show sync result when player or reader closes',
+                              value: showExitSyncNotifications,
+                              onChanged: (v) {
+                                unawaited(ctrl.setExitSyncNotifications(v));
+                              },
+                            ),
+                          ],
                         ),
                       ] else ...[
                         const SizedBox(height: 12),
@@ -303,8 +244,7 @@ class _GistSyncCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: AnymexText(
-                                  text: hasCloudGist == null
+                                child: AnymeXText(hasCloudGist == null
                                       ? 'Checking cloud gist status. Sync now to create one if needed.'
                                       : 'Create your cloud gist first to unlock sync preferences.',
                                   size: 12,
@@ -465,232 +405,219 @@ class _GistSyncCard extends StatelessWidget {
 
   void _showManageSheet(BuildContext context, GistSyncController ctrl) {
     unawaited(ctrl.refreshGithubProfile());
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: context.colors.surface,
-      builder: (ctx) => Obx(
-        () => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            10,
-            20,
-            20 + MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Align(
-                  alignment: Alignment.center,
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: ctx.colors.outlineVariant.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const AnymexText(
-                  text: 'Manage GitHub Gist Sync',
-                  variant: TextVariant.bold,
-                  size: 18,
-                ),
-                const SizedBox(height: 12),
-                Builder(builder: (context) {
-                  final isLogged = ctrl.isLoggedIn.value;
-                  final username = ctrl.githubUsername.value ?? 'GitHub User';
-                  final displayName = ctrl.githubDisplayName.value;
-                  final avatarUrl = ctrl.githubAvatarUrl.value;
-                  final hasCloudGist = ctrl.hasCloudGist.value;
-                  final isSyncing = ctrl.isSyncing.value;
-                  final lastSync = ctrl.lastSyncTime.value;
-                  final lastSyncSuccessful = ctrl.lastSyncSuccessful.value;
-                  final lastSyncDurationMs = ctrl.lastSyncDurationMs.value;
-                  final lastSyncError = ctrl.lastSyncError.value;
-                  final statusColor = _statusColor(
-                    ctx.colors,
-                    isLogged: isLogged,
-                    isSyncing: isSyncing,
-                    hasCloudGist: hasCloudGist,
-                    lastSyncSuccessful: lastSyncSuccessful,
-                  );
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: ctx.colors.surfaceContainerHigh.withOpacity(0.55),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: statusColor.withOpacity(0.35),
+    final ctx = context;
+    AnymeXSheet.custom(
+        Obx(
+          () => Padding(
+            padding: const EdgeInsets.fromLTRB(
+              10,
+              10,
+              10,
+              0
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: ctx.colors.outlineVariant.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(999),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            _GithubProfileAvatar(
-                              avatarUrl: avatarUrl,
-                              fallbackColor: ctx.colors.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  AnymexText(
-                                    text: displayName ?? username,
-                                    variant: TextVariant.semiBold,
-                                    size: 14,
-                                  ),
-                                  if (displayName != null &&
-                                      username.isNotEmpty &&
-                                      username != 'GitHub User')
-                                    AnymexText(
-                                      text: '@$username',
-                                      size: 11,
-                                      color: ctx.colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 16),
+                  const AnymeXText('Manage GitHub Gist Sync',
+                    variant: TextVariant.bold,
+                    size: 18,
+                  ),
+                  const SizedBox(height: 12),
+                  Builder(builder: (context) {
+                    final isLogged = ctrl.isLoggedIn.value;
+                    final username = ctrl.githubUsername.value ?? 'GitHub User';
+                    final displayName = ctrl.githubDisplayName.value;
+                    final avatarUrl = ctrl.githubAvatarUrl.value;
+                    final hasCloudGist = ctrl.hasCloudGist.value;
+                    final isSyncing = ctrl.isSyncing.value;
+                    final lastSync = ctrl.lastSyncTime.value;
+                    final lastSyncSuccessful = ctrl.lastSyncSuccessful.value;
+                    final lastSyncDurationMs = ctrl.lastSyncDurationMs.value;
+                    final lastSyncError = ctrl.lastSyncError.value;
+                    final statusColor = _statusColor(
+                      ctx.colors,
+                      isLogged: isLogged,
+                      isSyncing: isSyncing,
+                      hasCloudGist: hasCloudGist,
+                      lastSyncSuccessful: lastSyncSuccessful,
+                    );
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color:
+                            ctx.colors.surfaceContainerHigh.withOpacity(0.55),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: statusColor.withOpacity(0.35),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              _GithubProfileAvatar(
+                                avatarUrl: avatarUrl,
+                                fallbackColor: ctx.colors.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    AnymeXText(displayName ?? username,
+                                      variant: TextVariant.semiBold,
+                                      size: 14,
                                     ),
-                                ],
+                                    if (displayName != null &&
+                                        username.isNotEmpty &&
+                                        username != 'GitHub User')
+                                      AnymeXText('@$username',
+                                        size: 11,
+                                        color: ctx.colors.onSurfaceVariant,
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            _StatusPill(
-                              label: _statusBadgeLabel(
-                                isLogged: isLogged,
-                                isAuthenticating: ctrl.isAuthenticating.value,
-                                isSyncing: isSyncing,
-                                hasCloudGist: hasCloudGist,
-                                lastSyncSuccessful: lastSyncSuccessful,
+                              _StatusPill(
+                                label: _statusBadgeLabel(
+                                  isLogged: isLogged,
+                                  isAuthenticating: ctrl.isAuthenticating.value,
+                                  isSyncing: isSyncing,
+                                  hasCloudGist: hasCloudGist,
+                                  lastSyncSuccessful: lastSyncSuccessful,
+                                ),
+                                color: statusColor,
                               ),
-                              color: statusColor,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        AnymexText(
-                          text: _statusText(
-                            isLogged: isLogged,
-                            isSyncing: isSyncing,
-                            hasCloudGist: hasCloudGist,
-                            lastSync: lastSync,
-                            lastSyncSuccessful: lastSyncSuccessful,
-                            lastSyncDurationMs: lastSyncDurationMs,
-                            lastSyncError: lastSyncError,
+                            ],
                           ),
-                          size: 12,
-                          color: ctx.colors.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: ctrl.isSyncing.value
-                        ? null
-                        : () {
-                            unawaited(ctrl.manualSyncNow());
-                          },
-                    icon: ctrl.isSyncing.value
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: ctx.colors.onPrimary,
+                          const SizedBox(height: 6),
+                          AnymeXText(_statusText(
+                              isLogged: isLogged,
+                              isSyncing: isSyncing,
+                              hasCloudGist: hasCloudGist,
+                              lastSync: lastSync,
+                              lastSyncSuccessful: lastSyncSuccessful,
+                              lastSyncDurationMs: lastSyncDurationMs,
+                              lastSyncError: lastSyncError,
                             ),
-                          )
-                        : Icon(
-                            ctrl.hasCloudGist.value != true
-                                ? Icons.cloud_upload_rounded
-                                : Icons.sync_rounded,
+                            size: 12,
+                            color: ctx.colors.onSurfaceVariant,
                           ),
-                    label: Text(
-                      _primaryActionLabel(
-                        isLogged: ctrl.isLoggedIn.value,
-                        isAuthenticating: ctrl.isAuthenticating.value,
-                        isSyncing: ctrl.isSyncing.value,
-                        needsInitialize: ctrl.hasCloudGist.value != true,
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: ctrl.isSyncing.value
+                          ? null
+                          : () {
+                              unawaited(ctrl.manualSyncNow());
+                            },
+                      icon: ctrl.isSyncing.value
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: ctx.colors.onPrimary,
+                              ),
+                            )
+                          : Icon(
+                              ctrl.hasCloudGist.value == false
+                                  ? Icons.cloud_upload_rounded
+                                  : Icons.sync_rounded,
+                            ),
+                      label: AnymeXText(
+                        _primaryActionLabel(
+                          isLogged: ctrl.isLoggedIn.value,
+                          isAuthenticating: ctrl.isAuthenticating.value,
+                          isSyncing: ctrl.isSyncing.value,
+                          needsInitialize: ctrl.hasCloudGist.value == false,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                AnymexText(
-                  text: 'Cloud Tools',
-                  size: 12,
-                  variant: TextVariant.bold,
-                  color: ctx.colors.onSurfaceVariant,
-                ),
-                const SizedBox(height: 8),
-                _SheetActionTile(
-                  icon: Icons.open_in_new_rounded,
-                  title: 'View Cloud Gist',
-                  subtitle: 'Open your AnymeX sync gist on GitHub',
-                  onTap: ctrl.isSyncing.value || ctrl.hasCloudGist.value != true
-                      ? null
-                      : () => _openGistInBrowser(ctx, ctrl),
-                ),
-                const SizedBox(height: 8),
-                _SheetActionTile(
-                  icon: Icons.download_rounded,
-                  title: 'Export Gist JSON',
-                  subtitle: 'Save your current cloud progress to a file',
-                  onTap: ctrl.isSyncing.value || ctrl.hasCloudGist.value != true
-                      ? null
-                      : () => _exportGistJson(ctx, ctrl),
-                ),
-                const SizedBox(height: 8),
-                _SheetActionTile(
-                  icon: Icons.upload_file_rounded,
-                  title: 'Import Gist JSON',
-                  subtitle: 'Merge uploaded entries or replace cloud data',
-                  onTap: ctrl.isSyncing.value
-                      ? null
-                      : () => _importGistJson(ctx, ctrl),
-                ),
-                const SizedBox(height: 8),
-                _SheetActionTile(
-                  icon: Icons.delete_forever_rounded,
-                  title: 'Delete Cloud Gist',
-                  subtitle: 'Permanently remove AnymeX sync data',
-                  color: ctx.colors.error,
-                  onTap: ctrl.isSyncing.value || ctrl.hasCloudGist.value != true
-                      ? null
-                      : () {
+                  AnymeXSectionBuilder(
+                    title: 'Cloud Tools',
+                    margin: const EdgeInsets.only(top: 16),
+                    children: [
+                      AnymeXTile(
+                        icon: Icons.open_in_new_rounded,
+                        title: 'View Cloud Gist',
+                        subtitle: 'Open your AnymeX sync gist on GitHub',
+                        enabled: !ctrl.isSyncing.value &&
+                            ctrl.hasCloudGist.value != false,
+                        onTap: () => _openGistInBrowser(ctx, ctrl),
+                      ),
+                      AnymeXTile(
+                        icon: Icons.download_rounded,
+                        title: 'Export Gist JSON',
+                        subtitle: 'Save your current cloud progress to a file',
+                        enabled: !ctrl.isSyncing.value &&
+                            ctrl.hasCloudGist.value != false,
+                        onTap: () => _exportGistJson(ctx, ctrl),
+                      ),
+                      AnymeXTile(
+                        icon: Icons.upload_file_rounded,
+                        title: 'Import Gist JSON',
+                        subtitle:
+                            'Merge uploaded entries or replace cloud data',
+                        enabled: !ctrl.isSyncing.value,
+                        onTap: () => _importGistJson(ctx, ctrl),
+                      ),
+                      AnymeXTile(
+                        icon: Icons.delete_forever_rounded,
+                        title: 'Delete Cloud Gist',
+                        subtitle: 'Permanently remove AnymeX sync data',
+                        iconColor: ctx.colors.error,
+                        enabled: !ctrl.isSyncing.value &&
+                            ctrl.hasCloudGist.value != false,
+                        onTap: () {
                           _showDeleteGistDialog(ctx, ctrl);
                         },
-                ),
-                const SizedBox(height: 16),
-                AnymexText(
-                  text: 'Account',
-                  size: 12,
-                  variant: TextVariant.bold,
-                  color: ctx.colors.onSurfaceVariant,
-                ),
-                const SizedBox(height: 8),
-                _SheetActionTile(
-                  icon: IconlyLight.logout,
-                  title: 'Log Out',
-                  subtitle: 'Disconnect this GitHub account from AnymeX',
-                  onTap: () {
-                    ctrl.logout();
-                    Navigator.pop(ctx);
-                  },
-                ),
-              ],
+                      ),
+                    ],
+                  ),
+                  AnymeXSectionBuilder(
+                    title: 'Account',
+                    margin: const EdgeInsets.only(top: 16),
+                    children: [
+                      AnymeXTile(
+                        icon: IconlyLight.logout,
+                        title: 'Log Out',
+                        subtitle: 'Disconnect this GitHub account from AnymeX',
+                        onTap: () {
+                          ctrl.logout();
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+        context);
   }
 
   Future<void> _showDeleteGistDialog(
@@ -834,88 +761,37 @@ class _GistSyncCard extends StatelessWidget {
   }
 
   Future<_GistImportMode?> _showImportModeDialog(BuildContext context) {
+    final selectedMode = _GistImportMode.merge.obs;
     return showDialog<_GistImportMode>(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Container(
-          decoration: BoxDecoration(
-            color: ctx.colors.surfaceContainer,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: ctx.colors.outlineVariant.withOpacity(0.35),
+      builder: (ctx) => Obx(() => AnymeXDialog(
+            title: 'Import Gist JSON',
+            message:
+                'Choose how to apply the selected JSON file to your AnymeX cloud gist.',
+            confirmText: 'Import',
+            onConfirm: () {},
+            confirmResultGetter: () => selectedMode.value,
+            contentWidget: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnymeXTile.radio(
+                  selected: selectedMode.value == _GistImportMode.merge,
+                  title: 'Merge With Cloud',
+                  subtitle:
+                      'Keep both uploaded and cloud entries. If the same entry exists in both places, the newer one is kept. (Recommended)',
+                  onTap: () => selectedMode.value = _GistImportMode.merge,
+                ),
+                const SizedBox(height: 8),
+                AnymeXTile.radio(
+                  selected: selectedMode.value == _GistImportMode.replace,
+                  title: 'Replace Cloud Gist',
+                  subtitle:
+                      'Remove current cloud entries and replace them with the uploaded file.',
+                  onTap: () => selectedMode.value = _GistImportMode.replace,
+                ),
+              ],
             ),
-          ),
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: ctx.colors.primaryContainer,
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Icon(
-                      Icons.upload_file_rounded,
-                      color: ctx.colors.onPrimaryContainer,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: AnymexText(
-                      text: 'Import Gist JSON',
-                      variant: TextVariant.semiBold,
-                      size: 16,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AnymexText(
-                  text:
-                      'Choose how to apply the selected JSON file to your AnymeX cloud gist.',
-                  size: 12,
-                  color: ctx.colors.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _ImportModeOptionTile(
-                icon: Icons.hub_rounded,
-                title: 'Merge With Cloud',
-                subtitle:
-                    'Keep both uploaded and cloud entries. If the same entry exists in both places, the newer one is kept.',
-                badge: 'Recommended',
-                accent: ctx.colors.primary,
-                onTap: () => Navigator.of(ctx).pop(_GistImportMode.merge),
-              ),
-              const SizedBox(height: 10),
-              _ImportModeOptionTile(
-                icon: Icons.swap_horiz_rounded,
-                title: 'Replace Cloud Gist',
-                subtitle:
-                    'Remove current cloud entries and replace them with the uploaded file.',
-                accent: ctx.colors.error,
-                onTap: () => Navigator.of(ctx).pop(_GistImportMode.replace),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+          )),
     );
   }
 }
@@ -938,8 +814,7 @@ class _StatusPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withOpacity(0.35)),
       ),
-      child: AnymexText(
-        text: label,
+      child: AnymeXText(label,
         size: 10,
         variant: TextVariant.semiBold,
         color: color,
@@ -978,256 +853,6 @@ class _GithubProfileAvatar extends StatelessWidget {
                 errorBuilder: (_, __, ___) => Center(child: placeholder),
               )
             : Center(child: placeholder),
-      ),
-    );
-  }
-}
-
-class _SyncPreferenceTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _SyncPreferenceTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => onChanged(!value),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHigh.withOpacity(0.35),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: colors.outlineVariant.withOpacity(0.25),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(icon, size: 18, color: colors.primary),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AnymexText(
-                      text: title,
-                      size: 13,
-                      variant: TextVariant.semiBold,
-                    ),
-                    const SizedBox(height: 1),
-                    AnymexText(
-                      text: subtitle,
-                      size: 11,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: value,
-                onChanged: onChanged,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetActionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final Color? color;
-
-  const _SheetActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final accent = color ?? colors.onSurface;
-    final enabled = onTap != null;
-
-    return Opacity(
-      opacity: enabled ? 1 : 0.5,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Ink(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: colors.surfaceContainer,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: accent.withOpacity(0.2),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: accent.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, size: 18, color: accent),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AnymexText(
-                        text: title,
-                        size: 13,
-                        variant: TextVariant.semiBold,
-                      ),
-                      const SizedBox(height: 1),
-                      AnymexText(
-                        text: subtitle,
-                        size: 11,
-                        color: colors.onSurfaceVariant,
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: colors.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ImportModeOptionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String? badge;
-  final Color accent;
-  final VoidCallback onTap;
-
-  const _ImportModeOptionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.accent,
-    required this.onTap,
-    this.badge,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: accent.withOpacity(0.35), width: 1.2),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: accent, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AnymexText(
-                            text: title,
-                            variant: TextVariant.semiBold,
-                            size: 13,
-                          ),
-                        ),
-                        if (badge != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: accent.withOpacity(0.14),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: AnymexText(
-                              text: badge!,
-                              size: 10,
-                              variant: TextVariant.semiBold,
-                              color: accent,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    AnymexText(
-                      text: subtitle,
-                      size: 11,
-                      maxLines: 3,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1272,398 +897,17 @@ class _DeleteGistConfirmDialogState extends State<_DeleteGistConfirmDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return AlertDialog(
-      backgroundColor: colors.surfaceContainer,
-      title: const Text('Delete AnymeX Sync Gist?'),
-      content: const Text(
-        'This permanently deletes your AnymeX cloud progress gist from GitHub and cannot be undone.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: colors.error,
-            foregroundColor: colors.onError,
-          ),
-          onPressed:
-              _secondsLeft == 0 ? () => Navigator.of(context).pop(true) : null,
-          child: Text(
-            _secondsLeft == 0
-                ? 'I Understand, Delete'
-                : 'I Understand ($_secondsLeft)',
-          ),
-        ),
-      ],
+    return AnymeXDialog(
+      title: 'Delete AnymeX Sync Gist?',
+      message:
+          'This permanently deletes your AnymeX cloud progress gist from GitHub and cannot be undone.',
+      confirmText: _secondsLeft == 0
+          ? 'I Understand, Delete'
+          : 'I Understand ($_secondsLeft)',
+      isConfirmEnabled: _secondsLeft == 0,
+      onConfirm: () {},
+      confirmResultGetter: () => true,
+      cancelResultGetter: () => false,
     );
   }
-}
-
-class _ProviderChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ProviderChip({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? colors.primaryContainer
-                : colors.surfaceContainerLow.withOpacity(0.4),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected
-                  ? colors.primary
-                  : colors.outlineVariant.withOpacity(0.2),
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isSelected
-                    ? colors.onPrimaryContainer
-                    : colors.onSurfaceVariant,
-              ),
-              const SizedBox(height: 4),
-              AnymexText(
-                text: label,
-                size: 11,
-                variant: isSelected ? TextVariant.bold : TextVariant.regular,
-                color: isSelected
-                    ? colors.onPrimaryContainer
-                    : colors.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PocketBaseSyncCard extends StatefulWidget {
-  final GistSyncController ctrl;
-  const _PocketBaseSyncCard({required this.ctrl});
-
-  @override
-  State<_PocketBaseSyncCard> createState() => _PocketBaseSyncCardState();
-}
-
-class _PocketBaseSyncCardState extends State<_PocketBaseSyncCard> {
-  late final TextEditingController _urlCtrl;
-  late final TextEditingController _emailCtrl;
-  late final TextEditingController _passCtrl;
-  bool _obscurePassword = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _urlCtrl = TextEditingController(text: widget.ctrl.pocketbaseUrl.value);
-    _emailCtrl =
-        TextEditingController(text: widget.ctrl.pocketbaseEmail.value);
-    _passCtrl =
-        TextEditingController(text: widget.ctrl.pocketbasePassword.value);
-  }
-
-  @override
-  void dispose() {
-    _urlCtrl.dispose();
-    _emailCtrl.dispose();
-    _passCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Obx(() {
-      final isConnected = widget.ctrl.isPocketbaseConnected.value;
-      final isBusy = widget.ctrl.isAuthenticating.value;
-
-      return Container(
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLow.withOpacity(0.4),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isConnected
-                ? colors.primary.withOpacity(0.45)
-                : colors.outlineVariant.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isConnected
-                        ? colors.primaryContainer
-                        : colors.surfaceContainerHigh,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.dns_rounded,
-                    color: isConnected
-                        ? colors.onPrimaryContainer
-                        : colors.onSurfaceVariant,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: AnymexText(
-                    text: 'PocketBase Sync',
-                    variant: TextVariant.semiBold,
-                    size: 16,
-                  ),
-                ),
-                _StatusPill(
-                  label: isConnected ? 'Connected' : 'Not Connected',
-                  color: isConnected ? colors.primary : colors.error,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _urlCtrl,
-              decoration: InputDecoration(
-                labelText: 'Server URL',
-                hintText: 'http://192.168.1.50:8090',
-                prefixIcon: const Icon(Icons.link_rounded),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onChanged: (v) => widget.ctrl.pocketbaseUrl.value = v,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _emailCtrl,
-              decoration: InputDecoration(
-                labelText: 'Email / Username',
-                hintText: 'user@example.com',
-                prefixIcon: const Icon(Icons.person_outline_rounded),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onChanged: (v) => widget.ctrl.pocketbaseEmail.value = v,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _passCtrl,
-              obscureText: _obscurePassword,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                prefixIcon: const Icon(Icons.lock_outline_rounded),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                ),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onChanged: (v) => widget.ctrl.pocketbasePassword.value = v,
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: isBusy
-                        ? null
-                        : () async {
-                            await widget.ctrl.loginPocketbase(
-                              url: _urlCtrl.text,
-                              email: _emailCtrl.text,
-                              password: _passCtrl.text,
-                            );
-                          },
-                    icon: isBusy
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: colors.onPrimary),
-                          )
-                        : const Icon(Icons.login_rounded),
-                    label: Text(isConnected ? 'Re-connect' : 'Connect'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: isBusy
-                        ? null
-                        : () => widget.ctrl.testPocketbaseConnection(),
-                    icon: const Icon(Icons.check_circle_outline_rounded),
-                    label: const Text('Test Setup'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: isConnected
-                    ? () => _showPocketBaseManageSheet(context, widget.ctrl)
-                    : null,
-                icon: const Icon(Icons.storage_rounded),
-                label: const Text('Manage Database'),
-              ),
-            ),
-            if (isConnected) ...[
-              const SizedBox(height: 16),
-              AnymexText(
-                text: 'Sync Preferences',
-                size: 12,
-                variant: TextVariant.bold,
-                color: colors.onSurfaceVariant,
-              ),
-              const SizedBox(height: 8),
-              _SyncPreferenceTile(
-                icon: Icons.sync_rounded,
-                title: 'Auto-sync progress',
-                subtitle: 'Sync watch/read progress automatically',
-                value: widget.ctrl.syncEnabled.value,
-                onChanged: (v) => widget.ctrl.syncEnabled.value = v,
-              ),
-              const SizedBox(height: 8),
-              _SyncPreferenceTile(
-                icon: Icons.history_rounded,
-                title: 'Sync Local History across devices',
-                subtitle:
-                    'Sync homepage continue-watching history using PocketBase',
-                value: widget.ctrl.pocketbaseAutoSyncHistory.value,
-                onChanged: (v) {
-                  widget.ctrl.pocketbaseAutoSyncHistory.value = v;
-                  SyncKeys.pocketbaseAutoSyncHistory.set(v);
-                },
-              ),
-            ],
-          ],
-        ),
-      );
-    });
-  }
-}
-
-void _showPocketBaseManageSheet(
-    BuildContext context, GistSyncController ctrl) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: context.colors.surface,
-    builder: (ctx) => Obx(
-      () => Padding(
-        padding: EdgeInsets.fromLTRB(
-            20, 10, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Align(
-                alignment: Alignment.center,
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: ctx.colors.outlineVariant.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const AnymexText(
-                text: 'Manage PocketBase Database',
-                variant: TextVariant.bold,
-                size: 18,
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: ctx.colors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AnymexText(
-                      text: 'Server: ${ctrl.pocketbaseUrl.value}',
-                      size: 13,
-                      variant: TextVariant.semiBold,
-                    ),
-                    const SizedBox(height: 4),
-                    AnymexText(
-                      text: 'User: ${ctrl.pocketbaseEmail.value}',
-                      size: 12,
-                      color: ctx.colors.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await ctrl.pullLocalHistoryNow();
-                  },
-                  icon: const Icon(Icons.sync_rounded),
-                  label: const Text('Fetch Remote History Now'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: ctx.colors.error,
-                    side: BorderSide(color: ctx.colors.error.withOpacity(0.5)),
-                  ),
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await ctrl.clearPocketbaseData();
-                  },
-                  icon: const Icon(Icons.delete_forever_rounded),
-                  label: const Text('Clear Remote Database'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
 }

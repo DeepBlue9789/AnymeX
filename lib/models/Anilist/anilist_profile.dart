@@ -21,6 +21,10 @@ class Profile {
   bool splitCompletedManga;
   List<String> animeSectionOrder;
   List<String> mangaSectionOrder;
+  List<int>? perfectAnimeIds;
+  List<int>? perfectMangaIds;
+  List<FavouriteMedia>? perfectAnimeList;
+  List<FavouriteMedia>? perfectMangaList;
 
   Profile({
     this.id,
@@ -45,6 +49,10 @@ class Profile {
     this.splitCompletedManga = false,
     this.animeSectionOrder = const [],
     this.mangaSectionOrder = const [],
+    this.perfectAnimeIds,
+    this.perfectMangaIds,
+    this.perfectAnimeList,
+    this.perfectMangaList,
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) {
@@ -101,33 +109,40 @@ class Profile {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'userName': userName,
-      'avatar': {'large': avatar},
-      'bannerImage': cover,
-      'about': about,
-      'aboutMarkdown': aboutMarkdown,
-      'followers': {'pageInfo': {'total': followers}},
-      'following': {'pageInfo': {'total': following}},
-      'donatorTier': donatorTier,
-      'donatorBadge': donatorBadge,
-      'isFollowing': isFollowing,
-      'isFollower': isFollower,
-      'createdAt': createdAt,
-      'mediaListOptions': {
-        'animeList': {
-          'splitCompletedSectionByFormat': splitCompletedAnime,
-          'sectionOrder': animeSectionOrder,
-        },
-        'mangaList': {
-          'splitCompletedSectionByFormat': splitCompletedManga,
-          'sectionOrder': mangaSectionOrder,
-        }
-      }
-    };
+  factory Profile.fromMAL(Map<String, dynamic> json) {
+    final animeStatsJson = json['anime_statistics'];
+    final animeStats = animeStatsJson != null
+        ? AnimeStats(
+            animeCount: animeStatsJson['num_items']?.toString(),
+            episodesWatched: animeStatsJson['num_episodes']?.toString(),
+            meanScore: animeStatsJson['mean_score']?.toString(),
+            minutesWatched: animeStatsJson['num_days_watched'] != null
+                ? (animeStatsJson['num_days_watched'] * 24 * 60).toInt().toString()
+                : '??',
+          )
+        : null;
+
+    final mangaStatsJson = json['manga_statistics'];
+    final mangaStats = mangaStatsJson != null
+        ? MangaStats(
+            mangaCount: mangaStatsJson['num_items']?.toString(),
+            chaptersRead: mangaStatsJson['num_chapters']?.toString(),
+            volumesRead: mangaStatsJson['num_volumes']?.toString(),
+            meanScore: mangaStatsJson['mean_score']?.toString(),
+          )
+        : null;
+
+    return Profile(
+      id: json['id']?.toString(),
+      name: json['name'],
+      avatar: json['picture'],
+      stats: ProfileStatistics(
+        animeStats: animeStats,
+        mangaStats: mangaStats,
+      ),
+      followers: null,
+      following: null,
+    );
   }
 }
 
@@ -171,11 +186,27 @@ class FavouriteMedia {
   String? cover;
   double? averageScore;
   int? episodes;
+  List<String> genres;
+  List<String> tags;
 
-  FavouriteMedia(
-      {this.id, this.title, this.cover, this.averageScore, this.episodes});
+  FavouriteMedia({
+    this.id,
+    this.title,
+    this.cover,
+    this.averageScore,
+    this.episodes,
+    this.genres = const [],
+    this.tags = const [],
+  });
 
   factory FavouriteMedia.fromJson(Map<String, dynamic> json) {
+    final rawGenres = (json['genres'] as List<dynamic>?)?.cast<String>() ?? const [];
+    final rawTags = (json['tags'] as List<dynamic>?)
+            ?.map((e) => e is Map ? (e['name'] as String? ?? '') : e.toString())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        const [];
+
     return FavouriteMedia(
       id: json['id']?.toString(),
       title: json['title']?['userPreferred'] ??
@@ -186,6 +217,8 @@ class FavouriteMedia {
           ? (json['averageScore'] / 10).toDouble()
           : null,
       episodes: json['episodes'] ?? json['chapters'],
+      genres: rawGenres,
+      tags: rawTags,
     );
   }
 }

@@ -14,15 +14,15 @@ import 'package:anymex/screens/anime/widgets/social_section.dart';
 import 'package:anymex/utils/anime_adaptation_util.dart';
 import 'package:anymex/models/Anilist/anilist_media_user.dart';
 
-import 'package:anymex/screens/home_page.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_image_button.dart';
 import 'package:anymex/screens/search/search_view.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex/utils/theme_extensions.dart';
-import 'package:anymex/widgets/custom_widgets/custom_text.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:anymex_extension_runtime_bridge/Models/Source.dart';
-import 'package:anymex/widgets/custom_widgets/custom_expansion_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'package:get/get.dart';
 
 class AnimeStats extends StatelessWidget {
@@ -66,7 +66,7 @@ class AnimeStats extends StatelessWidget {
               ])
         .where((e) => e.cover != null && (e.cover?.isNotEmpty ?? false))
         .toList();
-    final isDesktop = MediaQuery.of(context).size.width > 600;
+    final isDesktop = MediaQuery.sizeOf(context).width > 600;
     final colorScheme = context.colors;
 
     return SingleChildScrollView(
@@ -93,8 +93,7 @@ class AnimeStats extends StatelessWidget {
                   context,
                   icon: Icons.language_rounded,
                   title: "Romaji Title",
-                  content: AnymexText(
-                    text: data.romajiTitle,
+                  content: AnymeXText(data.romajiTitle,
                     variant: TextVariant.semiBold,
                     size: 15,
                     maxLines: 3,
@@ -109,8 +108,7 @@ class AnimeStats extends StatelessWidget {
             context,
             icon: Icons.description_outlined,
             title: "Synopsis",
-            content: AnymexText(
-              text: data.description,
+            content: AnymeXText(data.description,
               size: 15,
               color: colorScheme.onSurface.opaque(0.9),
               maxLines: 100,
@@ -143,6 +141,20 @@ class AnimeStats extends StatelessWidget {
                                 'tags': [t.name]
                               },
                             )),
+                      ))
+                  .toList(),
+            ),
+          ],
+          if (data.externalLinks != null && data.externalLinks!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildChipSection(
+              context,
+              title: 'External & Streaming Links',
+              icon: Icons.open_in_new_rounded,
+              chips: data.externalLinks!
+                  .map((link) => _ChipData(
+                        label: link.site,
+                        onTap: () => launchUrlString(link.url, mode: LaunchMode.externalApplication),
                       ))
                   .toList(),
             ),
@@ -244,8 +256,7 @@ class AnimeStats extends StatelessWidget {
                     width: 1,
                   ),
                 ),
-                child: AnymexText(
-                  text: chip.label,
+                child: AnymeXText(chip.label,
                   size: 12,
                   variant: TextVariant.semiBold,
                   color: color,
@@ -300,14 +311,12 @@ class AnimeStats extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          AnymexText(
-                            text: "Openings & Endings",
+                          AnymeXText("Openings & Endings",
                             variant: TextVariant.bold,
                             size: 14,
                           ),
                           const SizedBox(height: 4),
-                          AnymexText(
-                            text: "View opening and ending themes",
+                          AnymeXText("View opening and ending themes",
                             variant: TextVariant.regular,
                             size: 13,
                             color: colorScheme.onSurface.opaque(0.6),
@@ -365,14 +374,12 @@ class AnimeStats extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  AnymexText(
-                                    text: "Recent News",
+                                  AnymeXText("Recent News",
                                     variant: TextVariant.bold,
                                     size: 14,
                                   ),
                                   const SizedBox(height: 4),
-                                  AnymexText(
-                                    text: "Read latest updates about this anime",
+                                  AnymeXText("Read latest updates about this anime",
                                     variant: TextVariant.regular,
                                     size: 13,
                                     color: colorScheme.onSurface.opaque(0.6),
@@ -430,15 +437,12 @@ class AnimeStats extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          AnymexText(
-                            text: "Watch Order",
+                          AnymeXText("Watch Order",
                             variant: TextVariant.bold,
                             size: 14,
                           ),
                           const SizedBox(height: 4),
-                          AnymexText(
-                            text:
-                                "View the chronological watch order of this anime",
+                          AnymeXText("View the chronological watch order of this anime",
                             variant: TextVariant.regular,
                             size: 13,
                             color: colorScheme.onSurface.opaque(0.6),
@@ -486,7 +490,8 @@ class AnimeStats extends StatelessWidget {
                             child: ImageButton(
                               height: getResponsiveSize(context,
                                   mobileSize: 60, desktopSize: 80),
-                              buttonText: relation.relationType,
+                              buttonText: relation.title,
+                              subText: relation.relationType,
                               onPressed: () {
                                 final isMangaRelation = relation.type == 'MANGA';
                                 final media = Media(
@@ -516,6 +521,7 @@ class AnimeStats extends StatelessWidget {
                               backgroundImage: relation.cover.isNotEmpty
                                   ? relation.cover
                                   : relation.poster,
+                              imageProportion: 0.5,
                           )))
                       .toList(),
                 ),
@@ -554,9 +560,7 @@ class AnimeStats extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: AnymexText(
-                  text:
-                      "EPISODE ${data.nextAiringEpisode?.episode} RELEASES IN",
+                child: AnymeXText("EPISODE ${data.nextAiringEpisode?.episode} RELEASES IN",
                   variant: TextVariant.bold,
                   size: 13,
                   color: colorScheme.onSurface.opaque(0.7),
@@ -566,8 +570,7 @@ class AnimeStats extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          AnymexText(
-            text: countdown,
+          AnymeXText(countdown,
             size: getResponsiveSize(context, mobileSize: 18, desktopSize: 22),
             variant: TextVariant.bold,
             color: colorScheme.primary,
@@ -587,13 +590,62 @@ class AnimeStats extends StatelessWidget {
     final colorScheme = context.colors;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.opaque(0.4),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: colorScheme.outline.opaque(0.2),
-          width: 1.0,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.opaque(0.15, iReallyMeanIt: true),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  size: 24,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              AnymeXText(title,
+                variant: TextVariant.bold,
+                size: 20,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required Widget content,
+  }) {
+    final colorScheme = context.colors;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.opaque(0.35),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outline.opaque(0.15, iReallyMeanIt: true),
+          width: 1.5,
         ),
       ),
       child: Column(
@@ -613,65 +665,14 @@ class AnimeStats extends StatelessWidget {
                   color: colorScheme.primary,
                 ),
               ),
-              const SizedBox(width: 8),
-              AnymexText(
-                text: title,
+              const SizedBox(width: 10),
+              AnymeXText(title,
                 variant: TextVariant.bold,
                 size: 16,
               ),
             ],
           ),
           const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required Widget content,
-  }) {
-    final colorScheme = context.colors;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.opaque(0.35),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colorScheme.outline.opaque(0.15, iReallyMeanIt: true),
-          width: 1.0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.opaque(0.15, iReallyMeanIt: true),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  size: 16,
-                  color: colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              AnymexText(
-                text: title,
-                variant: TextVariant.bold,
-                size: 14,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
           content,
         ],
       ),
@@ -704,8 +705,7 @@ class AnimeStats extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          AnymexText(
-            text: title,
+          AnymeXText(title,
             variant: TextVariant.bold,
             size: 16,
           ),
@@ -730,22 +730,21 @@ class AnimeStats extends StatelessWidget {
       header: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: colorScheme.primary.opaque(0.15, iReallyMeanIt: true),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               icon,
-              size: 18,
+              size: 24,
               color: colorScheme.primary,
             ),
           ),
-          const SizedBox(width: 8),
-          AnymexText(
-            text: title,
+          const SizedBox(width: 12),
+          AnymeXText(title,
             variant: TextVariant.bold,
-            size: 16,
+            size: 20,
           ),
         ],
       ),
@@ -757,6 +756,10 @@ class AnimeStats extends StatelessWidget {
 
   Widget _buildStatsGrid(BuildContext context) {
     final colorScheme = context.colors;
+    final ratingValue = (data.rating.isNotEmpty && data.rating != 'N/A' && data.rating != '?')
+        ? '${data.rating}/10'
+        : 'N/A';
+
     final stats = [
       {
         'label': 'Type',
@@ -765,7 +768,7 @@ class AnimeStats extends StatelessWidget {
       },
       {
         'label': 'Rating',
-        'value': '${data.rating}/10',
+        'value': ratingValue,
         'icon': Icons.star_outline_rounded
       },
       {'label': 'Format', 'value': data.format, 'icon': Icons.style_outlined},
@@ -784,11 +787,12 @@ class AnimeStats extends StatelessWidget {
         'value': data.totalEpisodes,
         'icon': Icons.movie_outlined
       },
-      {
-        'label': 'Season',
-        'value': data.season,
-        'icon': Icons.calendar_today_outlined
-      },
+      if (data.season != 'N/A' && data.season != '?' && data.season.isNotEmpty)
+        {
+          'label': 'Season',
+          'value': data.season,
+          'icon': Icons.calendar_today_outlined
+        },
       {
         'label': 'Duration',
         'value': data.duration,
@@ -827,9 +831,9 @@ class AnimeStats extends StatelessWidget {
       itemCount: stats.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        mainAxisExtent: 65,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        mainAxisExtent: 75,
       ),
       itemBuilder: (context, index) {
         final stat = stats[index];
@@ -837,10 +841,10 @@ class AnimeStats extends StatelessWidget {
         return GestureDetector(
           onTap: onTap != null ? () => onTap() : null,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: colorScheme.surface.opaque(0.4),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: colorScheme.primary.opaque(0.1),
                 width: 1,
@@ -859,8 +863,7 @@ class AnimeStats extends StatelessWidget {
                       color: colorScheme.primary.opaque(0.7),
                     ),
                     const SizedBox(width: 6),
-                    AnymexText(
-                      text: stat['label'].toString(),
+                    AnymeXText(stat['label'].toString(),
                       variant: TextVariant.regular,
                       size: 11,
                       color: colorScheme.onSurface.opaque(0.6),
@@ -868,8 +871,7 @@ class AnimeStats extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 6),
-                AnymexText(
-                  text: stat['value'].toString(),
+                AnymeXText(stat['value'].toString(),
                   variant: TextVariant.bold,
                   size: 15,
                   color: colorScheme.primary,

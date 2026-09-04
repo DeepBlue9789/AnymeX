@@ -1,12 +1,11 @@
 import 'dart:ui';
-import 'package:anymex/controllers/settings/methods.dart';
 import 'package:anymex/controllers/settings/settings.dart';
 import 'package:anymex/utils/theme_extensions.dart';
-import 'package:anymex/widgets/common/glow.dart';
-import 'package:anymex/widgets/custom_widgets/custom_text.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:anymex/widgets/common/navbar/navbar_registry.dart';
+import 'package:anymex/widgets/common/navbar/navbar_styles.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 
 class NavItem {
   final IconData selectedIcon;
@@ -15,6 +14,9 @@ class NavItem {
   final double? iconSize;
   final Function(int n) onTap;
   final Widget? altIcon;
+  final List<NavItem>? subItems;
+  final bool isSelected;
+  final Widget? subWidget;
 
   const NavItem({
     required this.selectedIcon,
@@ -23,6 +25,9 @@ class NavItem {
     this.iconSize,
     this.altIcon,
     required this.onTap,
+    this.subItems,
+    this.isSelected = false,
+    this.subWidget,
   });
 }
 
@@ -46,327 +51,20 @@ class ResponsiveNavBar extends StatefulWidget {
   State<ResponsiveNavBar> createState() => _ResponsiveNavBarState();
 }
 
-class _ResponsiveNavBarState extends State<ResponsiveNavBar>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _indicatorController;
-  late Animation<double> _indicatorPosition;
-  int _previousIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _previousIndex = widget.currentIndex;
-    _indicatorController = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    );
-    _indicatorPosition = Tween<double>(
-      begin: widget.currentIndex.toDouble(),
-      end: widget.currentIndex.toDouble(),
-    ).animate(CurvedAnimation(
-      parent: _indicatorController,
-      curve: Curves.easeOutCubic,
-    ));
-  }
-
-  @override
-  void didUpdateWidget(ResponsiveNavBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentIndex != widget.currentIndex) {
-      _previousIndex = oldWidget.currentIndex;
-      _indicatorPosition = Tween<double>(
-        begin: _previousIndex.toDouble(),
-        end: widget.currentIndex.toDouble(),
-      ).animate(CurvedAnimation(
-        parent: _indicatorController,
-        curve: Curves.easeOutCubic,
-      ));
-      _indicatorController.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _indicatorController.dispose();
-    super.dispose();
-  }
-
+class _ResponsiveNavBarState extends State<ResponsiveNavBar> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final settings = Get.find<Settings>();
-    final RxBool translucent = settings.transculentBar.obs;
-
-    final borderRadius = widget.borderRadius ??
-        BorderRadius.circular(
-          widget.isDesktop ? 24.multiplyRadius() : 28.multiplyRadius(),
-        );
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      margin: widget.margin ??
-          EdgeInsets.symmetric(
-            horizontal: widget.isDesktop ? 5 : 40,
-            vertical: widget.isDesktop ? 0 : 20,
-          ),
-      decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        border: Border.all(
-          color: theme.colorScheme.onSurface.opaque(0.08, iReallyMeanIt: true),
-          width: 0.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.opaque(0.08, iReallyMeanIt: true),
-            blurRadius: 24,
-            spreadRadius: 0,
-            offset: const Offset(0, 4),
-          ),
-          BoxShadow(
-            color: theme.colorScheme.primary.opaque(0.04, iReallyMeanIt: true),
-            blurRadius: 40,
-            spreadRadius: -8,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: Obx(() {
-          final isTranslucent = translucent.value;
-          return BackdropFilter(
-            filter: isTranslucent
-                ? ImageFilter.blur(sigmaX: 10, sigmaY: 10)
-                : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: isTranslucent
-                    ? theme.colorScheme.surfaceContainer.withValues(alpha: 0.45)
-                    : theme.colorScheme.surfaceContainer
-                        .withValues(alpha: 0.92),
-                borderRadius: borderRadius,
-              ),
-              child: widget.isDesktop
-                  ? _buildDesktopLayout(theme)
-                  : _buildMobileLayout(theme),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout(ThemeData theme) {
-    final itemCount = widget.items.length;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: SizedBox(
-        height: 44,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final totalWidth = constraints.maxWidth;
-            final itemWidth = totalWidth / itemCount;
-
-            return Stack(
-              children: [
-                AnimatedBuilder(
-                  animation: _indicatorPosition,
-                  builder: (context, _) {
-                    final pos = _indicatorPosition.value;
-                    return Positioned(
-                      left: pos * itemWidth + 4,
-                      top: 3,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: itemWidth - 8,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(22.multiplyRadius()),
-                          color: theme.colorScheme.primary
-                              .opaque(0.12, iReallyMeanIt: true),
-                          border: Border.all(
-                            color: theme.colorScheme.primary
-                                .opaque(0.15, iReallyMeanIt: true),
-                            width: 0.5,
-                          ),
-                          boxShadow: [
-                            glowingShadow(context),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                Row(
-                  children: List.generate(itemCount, (index) {
-                    final item = widget.items[index];
-                    final isSelected = widget.currentIndex == index;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => item.onTap(index),
-                        behavior: HitTestBehavior.opaque,
-                        child: _MobileNavItem(
-                          item: item,
-                          isSelected: isSelected,
-                          theme: theme,
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDesktopLayout(ThemeData theme) {
-    final itemCount = widget.items.length;
-    const itemHeight = 56.0;
-    const gap = 4.0;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-      child: SizedBox(
-        height: itemCount * (itemHeight + gap) - gap,
-        child: Stack(
-          children: [
-            AnimatedBuilder(
-              animation: _indicatorPosition,
-              builder: (context, _) {
-                final pos = _indicatorPosition.value;
-                return Positioned(
-                  top: pos * (itemHeight + gap) + 2,
-                  left: 2,
-                  right: 2,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    height: itemHeight - 4,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18.multiplyRadius()),
-                      color: theme.colorScheme.primary
-                          .opaque(0.12, iReallyMeanIt: true),
-                      border: Border.all(
-                        color: theme.colorScheme.primary
-                            .opaque(0.15, iReallyMeanIt: true),
-                        width: 0.5,
-                      ),
-                      boxShadow: [
-                        lightGlowingShadow(context),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(itemCount, (index) {
-                final item = widget.items[index];
-                final isSelected = widget.currentIndex == index;
-                return Padding(
-                  padding:
-                      EdgeInsets.only(bottom: index < itemCount - 1 ? gap : 0),
-                  child: AnymexOnTap(
-                    margin: 0,
-                    scale: 1,
-                    onTap: () => item.onTap(index),
-                    child: SizedBox(
-                      height: itemHeight,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutCubic,
-                            width: 3,
-                            height: isSelected ? 24 : 0,
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? theme.colorScheme.primary
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(1.5),
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: theme.colorScheme.primary
-                                            .opaque(0.5, iReallyMeanIt: true),
-                                        blurRadius: 8,
-                                        spreadRadius: 0,
-                                      ),
-                                    ]
-                                  : [],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          item.altIcon ??
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 250),
-                                child: Icon(
-                                  isSelected
-                                      ? item.selectedIcon
-                                      : item.unselectedIcon,
-                                  key: ValueKey(isSelected),
-                                  color: isSelected
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurface
-                                          .opaque(0.5, iReallyMeanIt: true),
-                                  size: item.iconSize ?? 22,
-                                ),
-                              ),
-                          const SizedBox(width: 8),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileNavItem extends StatelessWidget {
-  final NavItem item;
-  final bool isSelected;
-  final ThemeData theme;
-
-  const _MobileNavItem({
-    required this.item,
-    required this.isSelected,
-    required this.theme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          item.altIcon ??
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: Icon(
-                  isSelected ? item.selectedIcon : item.unselectedIcon,
-                  key: ValueKey(isSelected),
-                  color: isSelected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface
-                          .opaque(0.45, iReallyMeanIt: true),
-                  size: item.iconSize ?? 22,
-                ),
-              ),
-        ],
+    registerBuiltInNavBarStyles();
+    final navStyle = settingsController.navBarStyle;
+    return NavBarRegistry.buildByIndex(
+      context: context,
+      index: navStyle,
+      props: NavBarProps(
+        items: widget.items,
+        currentIndex: widget.currentIndex,
+        isDesktop: widget.isDesktop,
+        margin: widget.margin,
+        borderRadius: widget.borderRadius,
       ),
     );
   }
@@ -405,10 +103,10 @@ class _NavBarItemState extends State<NavBarItem>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 250),
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
     if (widget.isSelected) {
@@ -446,25 +144,15 @@ class _NavBarItemState extends State<NavBarItem>
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutCubic,
               width: 3,
-              height: widget.isSelected ? 28 : 0,
+              height: widget.isSelected ? 26 : 0,
               decoration: BoxDecoration(
                 color: widget.isSelected
                     ? theme.colorScheme.primary
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(1.5),
-                boxShadow: widget.isSelected
-                    ? [
-                        BoxShadow(
-                          color: theme.colorScheme.primary
-                              .opaque(0.5, iReallyMeanIt: true),
-                          blurRadius: 8,
-                          spreadRadius: 0,
-                        ),
-                      ]
-                    : [],
               ),
             ),
             AnymexOnTap(
@@ -472,7 +160,7 @@ class _NavBarItemState extends State<NavBarItem>
               scale: 1,
               onTap: widget.onTap,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 250),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: widget.isSelected
@@ -480,8 +168,6 @@ class _NavBarItemState extends State<NavBarItem>
                           .opaque(0.1, iReallyMeanIt: true)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow:
-                      widget.isSelected ? [lightGlowingShadow(context)] : [],
                 ),
                 child: widget.altIcon ??
                     ScaleTransition(
@@ -509,7 +195,7 @@ class _NavBarItemState extends State<NavBarItem>
           onTap: widget.onTap,
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
             width: widget.isSelected ? 72.0 : 50.0,
             height: 46.0,
@@ -518,7 +204,6 @@ class _NavBarItemState extends State<NavBarItem>
                   ? theme.colorScheme.primary.opaque(0.1, iReallyMeanIt: true)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(22),
-              boxShadow: widget.isSelected ? [glowingShadow(context)] : [],
             ),
             child: Center(
               child: widget.altIcon ??
@@ -574,7 +259,7 @@ class BlurredContainer extends StatelessWidget {
     final theme = Theme.of(context);
 
     return SizedBox(
-      width: MediaQuery.of(context).size.width,
+      width: MediaQuery.sizeOf(context).width,
       height: height,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
@@ -666,7 +351,7 @@ class BlurredContainerItem extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+          AnymeXText(
             label,
             style: theme.textTheme.bodySmall?.copyWith(
               color: isSelected

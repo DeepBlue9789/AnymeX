@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:anymex/utils/theme_extensions.dart';
 import 'package:flutter/services.dart';
 
+import 'package:anymex/controllers/settings/settings.dart';
 import 'package:anymex/mixins/scroll_aware_app_bar_mixin.dart';
 import 'package:anymex/widgets/common/animated_app_bar.dart';
 
@@ -16,20 +16,20 @@ class CustomAnimatedAppBar extends StatefulWidget {
   final SystemUiOverlayStyle? hiddenStatusBarStyle;
   static const double kAppBarOffset = 20.0;
   final double scrollThreshold;
-  final double height;
+  final double? height;
 
   const CustomAnimatedAppBar({
     super.key,
     required this.isVisible,
-    this.animationDuration = const Duration(milliseconds: 200),
-    this.animationCurve = Curves.easeOut,
+    this.animationDuration = const Duration(milliseconds: 450),
+    this.animationCurve = Curves.easeInOut,
     this.scrollController,
     required this.headerContent,
     this.backgroundColor,
     this.visibleStatusBarStyle = SystemUiOverlayStyle.dark,
     this.hiddenStatusBarStyle = SystemUiOverlayStyle.light,
     this.scrollThreshold = 10.0,
-    this.height = 72.0,
+    this.height,
   });
 
   @override
@@ -51,8 +51,10 @@ class _CustomAnimatedAppBarState extends State<CustomAnimatedAppBar>
   void initState() {
     super.initState();
 
-    _isAtTopNotifier = ValueNotifier<bool>(
-        (widget.scrollController?.offset ?? 0.0) <= widget.scrollThreshold);
+    final bool isAtTopInitial = widget.scrollController != null && widget.scrollController!.hasClients
+        ? widget.scrollController!.offset <= widget.scrollThreshold
+        : true;
+    _isAtTopNotifier = ValueNotifier<bool>(isAtTopInitial);
 
     _getEffectiveIsVisibleNotifier().addListener(_updateSystemOverlayStyle);
 
@@ -94,7 +96,12 @@ class _CustomAnimatedAppBarState extends State<CustomAnimatedAppBar>
         ? (widget.visibleStatusBarStyle ?? SystemUiOverlayStyle.dark)
         : (widget.hiddenStatusBarStyle ?? SystemUiOverlayStyle.light);
 
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (settingsController.enableImmersiveMode) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+
     SystemChrome.setSystemUIOverlayStyle(
       baseStyle.copyWith(
         systemNavigationBarColor: Colors.transparent,

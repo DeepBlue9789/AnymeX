@@ -2,13 +2,18 @@ import 'dart:math';
 
 import 'package:anymex/controllers/service_handler/service_handler.dart';
 import 'package:anymex/models/Anilist/anilist_media_user.dart';
+import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/screens/anime/details_page.dart';
 import 'package:anymex/utils/function.dart';
-import 'package:anymex/widgets/common/glow.dart';
+import 'package:anymex/widgets/common/anymex_scaffold.dart';
 import 'package:anymex/widgets/media_items/media_item.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:anymex/widgets/common/cards/card_gate.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:anymex/database/data_keys/keys.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_bottomsheet.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 
 enum _SortMode { lastUpdated, score, title, releaseDate }
 
@@ -58,8 +63,18 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
   final anilistAuth = Get.find<ServiceHandler>();
   late final List<String> _allTabs;
 
+  List<TrackedMedia> get activeMediaList {
+    final base = widget.data ?? anilistAuth.animeList;
+    if (anilistAuth.serviceType.value == ServicesType.simkl && widget.data == null) {
+      final combined = [...anilistAuth.animeList, ...anilistAuth.mangaList];
+      final seen = <String>{};
+      return combined.where((e) => e.id != null && seen.add(e.id!)).toList().removeDupes();
+    }
+    return base.removeDupes();
+  }
+
   List<String> get tabs {
-    final animeList = widget.data ?? anilistAuth.animeList;
+    final animeList = activeMediaList;
     return _allTabs.where((tab) {
       if (tab == 'ALL') return true;
       return _getFilteredList(animeList, tab).isNotEmpty;
@@ -85,6 +100,11 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    final savedSortModeIndex = KvHelper.get<int>('online_anime_sort_mode',
+        defaultVal: _SortMode.lastUpdated.index);
+    _sortMode = _SortMode.values[savedSortModeIndex];
+    _sortAscending =
+        KvHelper.get<bool>('online_anime_sort_ascending', defaultVal: false);
     if (widget.initialGenres != null) {
       _selectedGenres = Set.from(widget.initialGenres!);
     }
@@ -191,7 +211,7 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
   }
 
   void _collectGenres() {
-    final animeList = widget.data ?? anilistAuth.animeList;
+    final animeList = activeMediaList;
     final genres = <String>{..._anilistGenres};
     for (final entry in animeList) {
       genres.addAll(entry.genres);
@@ -263,7 +283,7 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
   void _openRandom() {
     final orderedTabs = _isReversed ? tabs.reversed.toList() : tabs;
     final currentTabName = orderedTabs[_tabController?.index ?? 0];
-    final animeList = widget.data ?? anilistAuth.animeList;
+    final animeList = activeMediaList;
     final items = _applyFilters(_getFilteredList(animeList, currentTabName));
     if (items.isEmpty) return;
     final random = items[Random().nextInt(items.length)];
@@ -273,34 +293,20 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
 
   void _showSortMenu(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: colors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
+    AnymeXSheet.custom(
+      SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: colors.onSurfaceVariant.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
                     Icon(Icons.sort_rounded, color: colors.primary, size: 20),
                     const SizedBox(width: 10),
-                    Text('Sort By',
+                    AnymeXText('Sort By',
                         style: TextStyle(
                           fontSize: 16,
                           fontFamily: 'Poppins-Bold',
@@ -310,8 +316,12 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                     const Spacer(),
                     TextButton.icon(
                       onPressed: () {
-                        setState(() => _sortAscending = !_sortAscending);
-                        Navigator.pop(ctx);
+                        setState(() {
+                          _sortAscending = !_sortAscending;
+                          KvHelper.set(
+                              'online_anime_sort_ascending', _sortAscending);
+                        });
+                        Navigator.pop(context);
                       },
                       icon: Icon(
                         _sortAscending
@@ -319,7 +329,7 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                             : Icons.arrow_downward_rounded,
                         size: 16,
                       ),
-                      label: Text(_sortAscending ? 'Ascending' : 'Descending',
+                      label: AnymeXText(_sortAscending ? 'Ascending' : 'Descending',
                           style: const TextStyle(fontSize: 12)),
                     ),
                   ],
@@ -344,7 +354,7 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                   leading: Icon(icon,
                       color:
                           selected ? colors.primary : colors.onSurfaceVariant),
-                  title: Text(label,
+                  title: AnymeXText(label,
                       style: TextStyle(
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
@@ -355,8 +365,11 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                           color: colors.primary, size: 20)
                       : null,
                   onTap: () {
-                    setState(() => _sortMode = mode);
-                    Navigator.pop(ctx);
+                    setState(() {
+                      _sortMode = mode;
+                      KvHelper.set('online_anime_sort_mode', _sortMode.index);
+                    });
+                    Navigator.pop(context);
                   },
                 );
               }),
@@ -364,6 +377,8 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
           ),
         ),
       ),
+      context,
+      showDragHandle: true,
     );
   }
 
@@ -372,137 +387,114 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
     final sortedGenres = _allGenres.toList()..sort();
     final tempSelected = Set<String>.from(_selectedGenres);
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: colors.surface,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.6,
+    AnymeXSheet.custom(
+      StatefulBuilder(
+        builder: (ctx, setSheetState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Row(
+                children: [
+                  Icon(Iconsax.filter, color: colors.primary, size: 20),
+                  const SizedBox(width: 10),
+                  AnymeXText('Filter by Genre',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontFamily: 'Poppins-Bold',
+                        fontWeight: FontWeight.bold,
+                        color: colors.onSurface,
+                      )),
+                  const Spacer(),
+                  if (tempSelected.isNotEmpty)
+                    TextButton(
+                      onPressed: () =>
+                          setSheetState(() => tempSelected.clear()),
+                      child:
+                          const AnymeXText('Clear', style: TextStyle(fontSize: 12)),
+                    ),
+                ],
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: colors.onSurfaceVariant.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  child: Row(
-                    children: [
-                      Icon(Iconsax.filter, color: colors.primary, size: 20),
-                      const SizedBox(width: 10),
-                      Text('Filter by Genre',
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: sortedGenres.map((genre) {
+                    final isSelected = tempSelected.contains(genre);
+                    return FilterChip(
+                      label: AnymeXText(genre,
                           style: TextStyle(
-                            fontSize: 16,
-                            fontFamily: 'Poppins-Bold',
-                            fontWeight: FontWeight.bold,
-                            color: colors.onSurface,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? colors.onPrimaryContainer
+                                : colors.onSurfaceVariant,
                           )),
-                      const Spacer(),
-                      if (tempSelected.isNotEmpty)
-                        TextButton(
-                          onPressed: () =>
-                              setSheetState(() => tempSelected.clear()),
-                          child: const Text('Clear',
-                              style: TextStyle(fontSize: 12)),
-                        ),
-                    ],
-                  ),
-                ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: sortedGenres.map((genre) {
-                        final isSelected = tempSelected.contains(genre);
-                        return FilterChip(
-                          label: Text(genre,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected
-                                    ? colors.onPrimaryContainer
-                                    : colors.onSurfaceVariant,
-                              )),
-                          selected: isSelected,
-                          onSelected: (val) {
-                            setSheetState(() {
-                              if (val) {
-                                tempSelected.add(genre);
-                              } else {
-                                tempSelected.remove(genre);
-                              }
-                            });
-                          },
-                          backgroundColor: colors.surfaceContainer,
-                          selectedColor: colors.primaryContainer,
-                          checkmarkColor: colors.onPrimaryContainer,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? colors.primary.withOpacity(0.5)
-                                  : colors.outlineVariant.withOpacity(0.3),
-                            ),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 2),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () {
-                        setState(
-                            () => _selectedGenres = Set.from(tempSelected));
-                        Navigator.pop(ctx);
+                      selected: isSelected,
+                      onSelected: (val) {
+                        setSheetState(() {
+                          if (val) {
+                            tempSelected.add(genre);
+                          } else {
+                            tempSelected.remove(genre);
+                          }
+                        });
                       },
-                      style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14))),
-                      child: Text(
-                        tempSelected.isEmpty
-                            ? 'Show All'
-                            : 'Apply (${tempSelected.length})',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      backgroundColor: colors.surfaceContainer,
+                      selectedColor: colors.primaryContainer,
+                      checkmarkColor: colors.onPrimaryContainer,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: isSelected
+                              ? colors.primary.withOpacity(0.5)
+                              : colors.outlineVariant.withOpacity(0.3),
+                        ),
                       ),
-                    ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    setState(() => _selectedGenres = Set.from(tempSelected));
+                    Navigator.pop(ctx);
+                  },
+                  style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14))),
+                  child: AnymeXText(
+                    tempSelected.isEmpty
+                        ? 'Show All'
+                        : 'Apply (${tempSelected.length})',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
+      context,
+      showDragHandle: true,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final animeList = widget.data ?? anilistAuth.animeList;
+    final animeList = activeMediaList;
     final userName = widget.userName ?? anilistAuth.profileData.value.name;
     final orderedTabs = _isReversed ? tabs.reversed.toList() : tabs;
 
@@ -512,9 +504,13 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
       _tabController = TabController(length: orderedTabs.length, vsync: this);
     }
 
-    return Glow(
-      child: Scaffold(
-        appBar: AppBar(
+    final tabFilteredItems = <String, List<TrackedMedia>>{};
+    for (final tab in orderedTabs) {
+      tabFilteredItems[tab] = _applyFilters(_getFilteredList(animeList, tab));
+    }
+
+    return AnymeXScaffold(
+  appBar: AppBar(
           titleSpacing: 0,
           leading: IconButton(
               onPressed: () => Navigator.pop(context),
@@ -522,10 +518,9 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                 Icons.arrow_back_ios_new,
                 color: colors.primary,
               )),
-          title: Text("$userName's ${widget.title ?? 'Anime'} List",
+          title: AnymeXText("$userName's ${widget.title ?? 'Anime'} List",
               style: TextStyle(fontSize: 16, color: colors.primary)),
           actions: [
-            // Search toggle
             IconButton(
               onPressed: () {
                 setState(() {
@@ -542,24 +537,21 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
               ),
               tooltip: _searchOpen ? 'Close search' : 'Search',
             ),
-            // Random
             IconButton(
               onPressed: _openRandom,
               icon: const Icon(Iconsax.shuffle, size: 20),
               tooltip: 'Random',
             ),
-            // Genre filter
             IconButton(
               onPressed: () => _showGenreFilter(context),
               icon: Badge(
                 isLabelVisible: _selectedGenres.isNotEmpty,
-                label: Text('${_selectedGenres.length}',
+                label: AnymeXText('${_selectedGenres.length}',
                     style: const TextStyle(fontSize: 9)),
                 child: const Icon(Iconsax.filter, size: 20),
               ),
               tooltip: 'Filter genres',
             ),
-            // 3-dot menu
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert_rounded, size: 22),
               shape: RoundedRectangleBorder(
@@ -585,7 +577,7 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                       Icon(Icons.sort_rounded,
                           size: 20, color: colors.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      const Text('Sort'),
+                      const AnymeXText('Sort'),
                     ],
                   ),
                 ),
@@ -596,7 +588,7 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                       Icon(Iconsax.arrow_swap_horizontal,
                           size: 20, color: colors.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Text(_isReversed ? 'Default tab order' : 'Reverse tabs'),
+                      AnymeXText(_isReversed ? 'Default tab order' : 'Reverse tabs'),
                     ],
                   ),
                 ),
@@ -672,13 +664,12 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                   labelPadding: const EdgeInsets.symmetric(horizontal: 14),
                   indicatorSize: TabBarIndicatorSize.label,
                   tabs: orderedTabs.map((tab) {
-                    final filtered =
-                        _applyFilters(_getFilteredList(animeList, tab));
+                    final filtered = tabFilteredItems[tab] ?? [];
                     final label = '${tab.toUpperCase()} (${filtered.length})';
                     return Tab(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 300),
-                        child: Text(
+                        child: AnymeXText(
                           label,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
@@ -694,13 +685,14 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
             ),
           ),
         ),
-        body: TabBarView(
+  body: TabBarView(
           controller: _tabController,
           children: orderedTabs.map((tab) {
-            final items = _applyFilters(_getFilteredList(animeList, tab));
+            final items = tabFilteredItems[tab] ?? [];
 
             if (items.isEmpty) {
               return Center(
+                key: PageStorageKey<String>('empty-$tab'),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -708,7 +700,7 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
                         size: 40,
                         color: colors.onSurfaceVariant.withOpacity(0.3)),
                     const SizedBox(height: 12),
-                    Text(
+                    AnymeXText(
                       _searchQuery.isNotEmpty || _selectedGenres.isNotEmpty
                           ? 'No matches found'
                           : 'No entries in $tab',
@@ -720,24 +712,36 @@ class _AnimeListState extends State<AnimeList> with TickerProviderStateMixin {
               );
             }
 
+            final crossAxisCount = getResponsiveCrossAxisVal(
+                MediaQuery.sizeOf(context).width,
+                itemWidth: 115);
+
             return GridView.builder(
+              key: PageStorageKey<String>('grid-$tab'),
               padding: const EdgeInsets.all(10),
               physics: const BouncingScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: getResponsiveCrossAxisVal(
-                      MediaQuery.of(context).size.width,
-                      itemWidth: 108),
-                  mainAxisExtent: 250,
-                  crossAxisSpacing: 10),
+                  crossAxisCount: crossAxisCount,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 5,
+                  childAspectRatio: getGridCardAspectRatio(
+                    context: context,
+                    crossAxisCount: crossAxisCount,
+                    spacing: 10,
+                    padding: 20,
+                  )),
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
-                return GridAnimeCard(data: item, isManga: false);
+                return GridAnimeCard(
+                  data: item,
+                  isManga: false,
+                  variant: CardVariant.onlinelist,
+                );
               },
             );
           }).toList(),
-        ),
-      ),
-    );
+        )
+);
   }
 }

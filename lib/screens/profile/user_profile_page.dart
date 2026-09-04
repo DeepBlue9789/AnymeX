@@ -5,11 +5,12 @@ import 'package:anymex/controllers/service_handler/service_handler.dart';
 import 'package:anymex/models/Anilist/anilist_profile.dart';
 
 import 'package:anymex/widgets/common/navbar.dart';
-import 'package:anymex/widgets/common/glow.dart';
+import 'package:anymex/widgets/common/anymex_scaffold.dart';
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:anymex/screens/anime/details_page.dart';
 import 'package:anymex/screens/manga/details_page.dart';
 import 'package:anymex/models/Media/media.dart';
+import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex/screens/profile/activity_details_page.dart';
 import 'package:anymex/widgets/non_widgets/activity_card.dart';
@@ -20,6 +21,7 @@ import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:anymex/screens/profile/widgets/widgets.dart';
 import 'dart:developer';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 
 class UserProfilePage extends StatefulWidget {
   final int userId;
@@ -224,7 +226,7 @@ class _UserProfilePageState extends State<UserProfilePage>
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Activity refreshed'),
+        content: AnymeXText('Activity refreshed'),
         duration: Duration(milliseconds: 1200),
       ),
     );
@@ -260,7 +262,7 @@ class _UserProfilePageState extends State<UserProfilePage>
         ),
         NavItem(
           selectedIcon: IconlyBold.user3,
-          unselectedIcon: IconlyLight.user1,
+          unselectedIcon: IconlyLight.user2,
           label: 'Social',
           onTap: (i) => setState(() => _selectedTab = 3),
         ),
@@ -274,7 +276,7 @@ class _UserProfilePageState extends State<UserProfilePage>
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
-          child: Text(
+          child: AnymeXText(
             'Failed to load profile — account may be private or not found',
             textAlign: TextAlign.center,
           ),
@@ -400,20 +402,18 @@ class _UserProfilePageState extends State<UserProfilePage>
     final bool isDesktop =
         getResponsiveValue(context, mobileValue: false, desktopValue: true);
 
-    return Glow(
-      child: Scaffold(
-        backgroundColor: context.theme.colorScheme.surface,
-        extendBody: true,
-        bottomNavigationBar: isDesktop
+    return AnymeXScaffold(
+  backgroundColor: context.theme.colorScheme.surface,
+  extendBody: true,
+  bottomNavigationBar: isDesktop
             ? null
             : ResponsiveNavBar(
                 isDesktop: false,
                 currentIndex: _selectedTab,
                 items: _profileNavItems,
               ),
-        body: _buildBody(context, isDesktop),
-      ),
-    );
+  body: _buildBody(context, isDesktop)
+);
   }
 
   List<Widget> _buildTabSlivers(BuildContext context, Profile user) {
@@ -493,7 +493,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                     if (!Get.find<AnilistAuth>().isLoggedIn.value) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Please login first'),
+                          content: AnymeXText('Please login first'),
                           duration: Duration(milliseconds: 1500),
                         ),
                       );
@@ -578,6 +578,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                           title: activity.mediaTitle ?? '',
                           poster: activity.mediaCoverUrl ?? '',
                           serviceType: ServicesType.anilist,
+                          mediaType: ItemType.anime,
                         );
                         Navigator.push(
                           context,
@@ -594,6 +595,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                           title: activity.mediaTitle ?? '',
                           poster: activity.mediaCoverUrl ?? '',
                           serviceType: ServicesType.anilist,
+                          mediaType: ItemType.manga,
                         );
                         Navigator.push(
                           context,
@@ -642,7 +644,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 20),
                       child: Center(
-                        child: Text(
+                        child: AnymeXText(
                           'No more activities',
                           style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
@@ -678,7 +680,7 @@ class _UserProfilePageState extends State<UserProfilePage>
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Activity deleted'),
+        content: AnymeXText('Activity deleted'),
         duration: Duration(milliseconds: 1200),
       ),
     );
@@ -782,32 +784,58 @@ class _UserProfilePageState extends State<UserProfilePage>
     }
 
     if (isDesktop) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // About
-            Expanded(
-              flex: 6,
-              child: buildAboutSection(needsPadding: false),
-            ),
-            const SizedBox(width: 20),
-            // Activity + Favourites
-            Expanded(
-              flex: 4,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  buildActivitySection(needsPadding: false),
-                  buildFavouritesSection(needsPadding: false),
-                  const SizedBox(height: 50),
-                ],
+      final hasFavourites = (user.favourites?.anime.isNotEmpty ?? false) ||
+          (user.favourites?.manga.isNotEmpty ?? false) ||
+          (user.favourites?.characters.isNotEmpty ?? false) ||
+          (user.favourites?.staff.isNotEmpty ?? false) ||
+          (user.favourites?.studios.isNotEmpty ?? false);
+      final hasRightColumn = hasActivity || hasFavourites;
+
+      if (hasAbout && hasRightColumn) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 6,
+                child: buildAboutSection(needsPadding: false),
               ),
-            ),
-          ],
-        ),
-      );
+              const SizedBox(width: 20),
+              Expanded(
+                flex: 4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildActivitySection(needsPadding: false),
+                    buildFavouritesSection(needsPadding: false),
+                    const SizedBox(height: 50),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      } else if (hasAbout) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: buildAboutSection(needsPadding: false),
+        );
+      } else if (hasRightColumn) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildActivitySection(needsPadding: false),
+              buildFavouritesSection(needsPadding: false),
+              const SizedBox(height: 50),
+            ],
+          ),
+        );
+      } else {
+        return const SizedBox.shrink();
+      }
     }
 
     return Column(
@@ -970,7 +998,7 @@ class _UserProfilePageState extends State<UserProfilePage>
           ),
           child: Padding(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
               left: 16,
               right: 16,
               top: 20,
@@ -982,7 +1010,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
+                    AnymeXText(
                       "Message ${_userProfile?.name ?? 'User'}",
                       style: TextStyle(
                         fontSize: 18,
@@ -1032,7 +1060,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(isPrivate
+                              content: AnymeXText(isPrivate
                                   ? 'Private message sent successfully!'
                                   : 'Message posted successfully!'),
                               backgroundColor: Colors.green,
@@ -1045,7 +1073,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Failed to post message: $e'),
+                              content: AnymeXText('Failed to post message: $e'),
                               backgroundColor: Colors.red,
                             ),
                           );

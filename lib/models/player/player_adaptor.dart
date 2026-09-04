@@ -29,12 +29,15 @@ class PlayerSettings {
   double subtitleOpacity;
   double subtitleBottomMargin;
   String subtitleOutlineType;
+  bool enableScreenshot;
   bool playerMenuAnimation;
   String hardwareDecoder;
   String preferredSubtitleLanguage;
   String videoOutput;
-  bool enableGestureSafeZones;
-  double gestureSafeZoneMargin;
+  String audioOutput;
+  bool enableHoldToSeek;
+  bool enableSlideToSeek;
+  bool useMediaSession;
 
   PlayerSettings({
     this.speed = 1.0,
@@ -65,12 +68,15 @@ class PlayerSettings {
     this.subtitleBottomMargin = 10.0,
     this.subtitleOutlineType = "Outline",
     this.autoSkipFiller = false,
+    this.enableScreenshot = false,
     this.playerMenuAnimation = true,
-    this.hardwareDecoder = 'hw',
+    this.hardwareDecoder = 'hw+',
     this.preferredSubtitleLanguage = 'none',
     this.videoOutput = 'gpu',
-    this.enableGestureSafeZones = true,
-    this.gestureSafeZoneMargin = 40.0,
+    this.audioOutput = 'auto',
+    this.enableHoldToSeek = true,
+    this.enableSlideToSeek = true,
+    this.useMediaSession = false,
   });
 
   factory PlayerSettings.fromDB() {
@@ -136,6 +142,8 @@ class PlayerSettings {
           .get<String>(defaults.subtitleOutlineType),
       autoSkipFiller:
           PlayerSettingsKeys.autoSkipFiller.get<bool>(defaults.autoSkipFiller),
+      enableScreenshot: PlayerSettingsKeys.enableScreenshot
+          .get<bool>(defaults.enableScreenshot),
       playerMenuAnimation: PlayerSettingsKeys.playerMenuAnimation
           .get<bool>(defaults.playerMenuAnimation),
       hardwareDecoder: _readHardwareDecoder(),
@@ -143,10 +151,14 @@ class PlayerSettings {
           .get<String>(defaults.preferredSubtitleLanguage),
       videoOutput: PlayerSettingsKeys.videoOutput
           .get<String>(defaults.videoOutput),
-      enableGestureSafeZones: PlayerSettingsKeys.enableGestureSafeZones
-          .get<bool>(defaults.enableGestureSafeZones),
-      gestureSafeZoneMargin: PlayerSettingsKeys.gestureSafeZoneMargin
-          .get<double>(defaults.gestureSafeZoneMargin),
+      audioOutput: PlayerSettingsKeys.audioOutput
+          .get<String>(defaults.audioOutput),
+      enableHoldToSeek: PlayerSettingsKeys.enableHoldToSeek
+          .get<bool>(defaults.enableHoldToSeek),
+      enableSlideToSeek: PlayerSettingsKeys.enableSlideToSeek
+          .get<bool>(defaults.enableSlideToSeek),
+      useMediaSession: PlayerSettingsKeys.useMediaSession
+          .get<bool>(defaults.useMediaSession),
     );
   }
 }
@@ -158,14 +170,14 @@ String _normalizeHardwareDecoder(String value) {
     case 'sw':
       return value;
     default:
-      return 'hw';
+      return 'hw+';
   }
 }
 
 String _readHardwareDecoder() {
   final stored = PlayerSettingsKeys.hardwareDecoder.get<String>('');
   if (stored.isEmpty) {
-    return 'hw';
+    return 'hw+';
   }
   return _normalizeHardwareDecoder(stored);
 }

@@ -1,9 +1,8 @@
 import 'package:anymex/utils/theme_extensions.dart';
 import 'package:anymex/widgets/common/anymex_slider_m3.dart';
-import 'package:anymex/widgets/common/glow.dart';
-import 'package:anymex/widgets/common/slider_semantics.dart';
-import 'package:anymex/widgets/custom_widgets/custom_icon_wrapper.dart';
-import 'package:anymex/widgets/custom_widgets/custom_text.dart';
+import 'package:anymex/widgets/common/anymex_scaffold.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_icon_wrapper.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -139,7 +138,7 @@ class CustomSwitchTile extends StatelessWidget {
     required this.description,
     required this.switchValue,
     required this.onChanged,
-    this.padding = const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+    this.padding = const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
   });
 
   @override
@@ -148,25 +147,25 @@ class CustomSwitchTile extends StatelessWidget {
       padding: padding,
       child: Row(
         children: [
-          AnymexIcon(icon, size: 22, color: context.colors.primary),
-          const SizedBox(width: 14),
+          AnymeXIcon(icon, size: 30, color: context.colors.primary),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                AnymeXText(
                   title,
                   style: TextStyle(
-                    fontSize: 14.5,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: context.colors.onSurface,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
+                const SizedBox(height: 5),
+                AnymeXText(
                   description,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 14,
                     color: Theme.of(context).colorScheme.onSurface.opaque(0.6),
                   ),
                 ),
@@ -236,31 +235,31 @@ class CustomTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: EdgeInsets.symmetric(
-                  horizontal: padding ?? 16.0, vertical: 6.0),
+                  horizontal: padding ?? 20.0, vertical: 10.0),
               child: Row(
                 children: [
                   if (prefix == null)
-                    AnymexIcon(icon, size: 22, color: context.colors.primary)
+                    AnymeXIcon(icon, size: 30, color: context.colors.primary)
                   else
                     prefix!,
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 20),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        AnymeXText(
                           title,
                           style: TextStyle(
-                            fontSize: 14.5,
+                            fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: context.colors.onSurface,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
+                        const SizedBox(height: 5),
+                        AnymeXText(
                           description,
                           style: TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 14,
                             fontFamily: (isDescBold ?? false)
                                 ? "Poppins-Bold"
                                 : "Poppins",
@@ -275,7 +274,7 @@ class CustomTile extends StatelessWidget {
                     ),
                   ),
                   if (postFix == null)
-                    Icon(IconlyLight.arrowRight2, size: 18, color: context.colors.primary)
+                    Icon(IconlyLight.arrowRight2, color: context.colors.primary)
                   else
                     postFix!
                 ],
@@ -337,30 +336,30 @@ class CustomSliderTile extends StatelessWidget {
           },
           child: Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
             child: Column(
               children: [
                 Row(
                   children: [
-                    AnymexIcon(icon, size: 22, color: context.colors.primary),
-                    const SizedBox(width: 14),
+                    AnymeXIcon(icon, size: 30, color: context.colors.primary),
+                    const SizedBox(width: 20),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          AnymeXText(
                             title,
                             style: TextStyle(
-                              fontSize: 14.5,
+                              fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: context.colors.onSurface,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
+                          const SizedBox(height: 5),
+                          AnymeXText(
                             description,
                             style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 14,
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
@@ -372,13 +371,12 @@ class CustomSliderTile extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 20),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10.0),
                   child: Row(
                     children: [
-                      AnymexText(
-                        text: sliderValue % 1 == 0
+                      AnymeXText(sliderValue % 1 == 0
                             ? sliderValue.toInt().toString()
                             : sliderValue.toStringAsFixed(1),
                         variant: TextVariant.semiBold,
@@ -405,8 +403,7 @@ class CustomSliderTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      AnymexText(
-                        text: max % 1 == 0
+                      AnymeXText(max % 1 == 0
                             ? max.toInt().toString()
                             : max.toStringAsFixed(1),
                         variant: TextVariant.semiBold,

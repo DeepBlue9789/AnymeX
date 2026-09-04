@@ -1,18 +1,19 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/setup/player_control_theme.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/bottom_sheet.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/progress_slider.dart';
 import 'package:anymex/screens/settings/sub_settings/settings_player.dart';
-import 'package:anymex/utils/theme_extensions.dart';
 import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 import 'package:anymex/widgets/common/marquee_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:anymex/controllers/settings/settings.dart';
 import 'package:get/get.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 
 
 class JsonThemeParseResult {
@@ -497,19 +498,18 @@ class ThemeRenderer {
   }
 
   Widget? _buildItem(ThemeItem item) {
-    // NOTE: visibleWhen checks are pushed into each item's own reactive scope
-    // to avoid subscribing the zone-level Obx to per-item observables.
+    if (!_checkCondition(item.visibleWhen)) return null;
+
+    // witness my genius, the way i handle all this so ineffeciently
 
     switch (item.id) {
       case 'gap':
-        if (!_checkCondition(item.visibleWhen)) return null;
         final size = item.grabDouble('size', 8);
         return SizedBox(
             width: item.grabDouble('width', size),
             height: item.grabDouble('height', 0));
 
       case 'spacer':
-        if (!_checkCondition(item.visibleWhen)) return null;
         final flex = item.grabInt('flex', 0);
         if (flex > 0) {
           return Expanded(flex: flex, child: const SizedBox.shrink());
@@ -520,12 +520,10 @@ class ThemeRenderer {
             height: item.grabDouble('height', 0));
 
       case 'flex_spacer':
-        if (!_checkCondition(item.visibleWhen)) return null;
         return Expanded(
             flex: item.grabInt('flex', 1), child: const SizedBox.shrink());
 
       case 'progress_slider':
-        if (!_checkCondition(item.visibleWhen)) return null;
         final activeTrackColor = item.grabString('activeTrackColor') ??
             item.grabString('progressActiveTrackColor');
         final inactiveTrackColor = item.grabString('inactiveTrackColor') ??
@@ -555,69 +553,46 @@ class ThemeRenderer {
         );
 
       case 'time_current':
-        return Obx(() {
-          if (!_checkCondition(item.visibleWhen)) return const SizedBox.shrink();
-          return _makeChipThing(controller.formattedCurrentPosition, item);
-        });
+        return _makeChipThing(controller.formattedCurrentPosition, item);
 
       case 'time_duration':
-        return Obx(() {
-          if (!_checkCondition(item.visibleWhen)) return const SizedBox.shrink();
-          return _makeChipThing(controller.formattedEpisodeDuration, item);
-        });
+        return _makeChipThing(controller.formattedEpisodeDuration, item);
 
       case 'time_remaining':
-        return Obx(() {
-          if (!_checkCondition(item.visibleWhen)) return const SizedBox.shrink();
-          return _makeChipThing(_calcRemainingTime(), item);
-        });
+        return _makeChipThing(_calcRemainingTime(), item);
 
       case 'title':
-        return Obx(() {
-          if (!_checkCondition(item.visibleWhen)) return const SizedBox.shrink();
-          final text = _getTitleText();
-          if (text.isEmpty) return const SizedBox.shrink();
-          return _makeTextThing(
-              value: text,
-              item: item,
-              maxLines: item.grabInt('maxLines', 1),
-              isMarquee: true);
-        });
+        final text = _getTitleText();
+        if (text.isEmpty) return null;
+        return _makeTextThing(
+            value: text,
+            item: item,
+            maxLines: item.grabInt('maxLines', 1),
+            isMarquee: true);
 
       case 'episode_badge':
-        return Obx(() {
-          if (!_checkCondition(item.visibleWhen)) return const SizedBox.shrink();
-          return _makeBadgeThing(_getEpisodeLabel(), item);
-        });
+        return _makeBadgeThing(_getEpisodeLabel(), item);
 
       case 'series_badge':
-        if (!_checkCondition(item.visibleWhen)) return null;
         final label = _getSeriesLabel();
         if (label.isEmpty) return null;
         return _makeBadgeThing(label, item);
 
       case 'quality_badge':
-        return Obx(() {
-          if (!_checkCondition(item.visibleWhen)) return const SizedBox.shrink();
-          final label = _heightToQuality(controller.videoHeight.value);
-          if (label.isEmpty) return const SizedBox.shrink();
-          return _makeBadgeThing(label, item);
-        });
+        final label = _heightToQuality(controller.videoHeight.value);
+        if (label.isEmpty) return null;
+        return _makeBadgeThing(label, item);
 
       case 'decoder_button':
-        if (!_checkCondition(item.visibleWhen)) return null;
         return _makeDecoderThing(item);
 
       case 'label_stack':
-        if (!_checkCondition(item.visibleWhen)) return null;
         return _makeLabelStackThing(item);
 
       case 'watching_label':
-        if (!_checkCondition(item.visibleWhen)) return null;
         return _makeWatchingLabelThing(item);
 
       case 'text':
-        if (!_checkCondition(item.visibleWhen)) return null;
         final source = item.grabString('source');
         final fallbackText = item.grabString('text') ?? '';
         final value = source != null ? _textFromSource(source) : fallbackText;
@@ -626,7 +601,6 @@ class ThemeRenderer {
             value: value, item: item, maxLines: item.grabInt('maxLines', 1));
 
       default:
-        // Buttons handle visibleWhen inside their own Obx
         return _makeButtonThing(item);
     }
   }
@@ -710,7 +684,7 @@ class ThemeRenderer {
       crossAxisAlignment: crossAxis,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
+        AnymeXText(
           topText,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -742,7 +716,9 @@ class ThemeRenderer {
   Widget? _makeButtonThing(ThemeItem item) {
     final id = item.id;
 
-    // Static checks — no observable reads, safe to return null at zone scope
+    if ((id == 'server' || id == 'quality') && controller.isOffline.value) {
+      return null;
+    }
     if (id == 'orientation' && !_isMobile) return null;
 
     final isPlayPause = id == 'play_pause';
@@ -750,53 +726,58 @@ class ThemeRenderer {
     final baseStyle = wantsBig ? def.styles.primaryButton : def.styles.button;
     final style = baseStyle.mash(item.style);
 
-    // Pre-resolve icon for non-play-pause (no observable reads)
-    IconData? icon;
-    if (!isPlayPause && id != 'orientation') {
-      icon = _pickIcon(item.grabString('icon'), id);
-      if (icon == null) return null;
+    bool enabled = _isThingEnabled(id);
+    if (item.enabledWhen != null) {
+      enabled = enabled && _checkCondition(item.enabledWhen);
     }
 
-    // Wrap ALL reactive state reads in a per-button Obx so the zone-level
-    // Obx is not subscribed to isOffline / isPlaying / isBuffering / etc.
-    return Obx(() {
-      // Reactive visibility check for the item
-      if (!_checkCondition(item.visibleWhen)) {
-        return const SizedBox.shrink();
-      }
+    if (isPlayPause) return _makePlayPauseButton(item, style, enabled);
 
-      if ((id == 'server' || id == 'quality') && controller.isOffline.value) {
-        return const SizedBox.shrink();
-      }
+    final iconColor = _resolveColor(style.iconColor, fallback: Colors.white);
+    final disabledColor = _resolveColor(style.disabledIconColor,
+        fallback: Colors.white.withValues(alpha: 0.55));
 
-      bool enabled = _isThingEnabled(id);
-      if (item.enabledWhen != null) {
-        enabled = enabled && _checkCondition(item.enabledWhen);
-      }
+    if (id == 'orientation') {
+      return Obx(() {
+        final orientation = controller.physicalOrientation.value;
+        double angle = 0.0;
+        if (orientation == DeviceOrientation.landscapeLeft) {
+          angle = -1.57079632679;
+        } else if (orientation == DeviceOrientation.landscapeRight) {
+          angle = 1.57079632679;
+        } else if (orientation == DeviceOrientation.portraitDown) {
+          angle = 3.14159265359;
+        }
+        return _makeButtonShell(
+          style: style,
+          tooltip: item.grabString('tooltip') ?? _tooltipForId(id),
+          enabled: enabled,
+          onTap: enabled ? () => _doAction(id, item) : null,
+          guts: Transform.rotate(
+            angle: angle,
+            child: Icon(
+              Icons.smartphone_rounded,
+              size: style.iconSize,
+              color: enabled ? iconColor : disabledColor,
+            ),
+          ),
+        );
+      });
+    }
 
-      if (isPlayPause) return _makePlayPauseButton(item, style, enabled);
+    final icon = _pickIcon(item.grabString('icon'), id);
+    if (icon == null) return null;
 
-      final iconColor = _resolveColor(style.iconColor, fallback: Colors.white);
-      final disabledColor = _resolveColor(style.disabledIconColor,
-          fallback: Colors.white.withValues(alpha: 0.55));
-
-      return _makeButtonShell(
-        style: style,
-        tooltip: item.grabString('tooltip') ?? _tooltipForId(id),
-        enabled: enabled,
-        onTap: enabled ? () => _doAction(id, item) : null,
-        onLongPress:
-            enabled && id == 'aspect_ratio' ? controller.resetVideoFit : null,
-        guts: Icon(
-            id == 'orientation'
-                ? (controller.isLandscapeAutoRotateEnabled.value
-                    ? Icons.screen_rotation_alt_rounded
-                    : Icons.screen_lock_rotation_rounded)
-                : icon!,
-            size: style.iconSize,
-            color: enabled ? iconColor : disabledColor),
-      );
-    });
+    return _makeButtonShell(
+      style: style,
+      tooltip: item.grabString('tooltip') ?? _tooltipForId(id),
+      enabled: enabled,
+      onTap: enabled ? () => _doAction(id, item) : null,
+      onLongPress:
+          enabled && id == 'aspect_ratio' ? controller.resetVideoFit : null,
+      guts: Icon(icon,
+          size: style.iconSize, color: enabled ? iconColor : disabledColor),
+    );
   }
 
   Widget _makePlayPauseButton(
@@ -870,8 +851,18 @@ class ThemeRenderer {
       ),
     );
 
-    current = ClipRRect(
-        borderRadius: BorderRadius.circular(style.radius), child: current);
+    if (style.blur > 0) {
+      current = ClipRRect(
+        borderRadius: BorderRadius.circular(style.radius),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
+          child: current,
+        ),
+      );
+    } else {
+      current = ClipRRect(
+          borderRadius: BorderRadius.circular(style.radius), child: current);
+    }
 
     if (tooltip != null && tooltip.trim().isNotEmpty) {
       return Tooltip(message: tooltip, child: current);
@@ -895,7 +886,7 @@ class ThemeRenderer {
         borderRadius: BorderRadius.circular(style.radius),
         border: Border.all(color: borderColor, width: style.borderWidth),
       ),
-      child: Text(
+      child: AnymeXText(
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -957,7 +948,7 @@ class ThemeRenderer {
         style.backgroundColor!.trim().isNotEmpty &&
         style.backgroundColor!.trim().toLowerCase() != 'transparent';
 
-    Widget textWidget = Text(
+    Widget textWidget = AnymeXText(
       value,
       maxLines: maxLines,
       overflow: TextOverflow.ellipsis,
@@ -1051,8 +1042,15 @@ class ThemeRenderer {
       child: Padding(padding: style.padding, child: child),
     );
 
+    if (wantsBlur) {
+      panelKid = BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
+        child: panelKid,
+      );
+    }
+
     if (wantsBlur || wantsBg || wantsBorder) {
-      panelKid = ClipRRect(
+      return ClipRRect(
         borderRadius: BorderRadius.circular(style.radius),
         child: panelKid,
       );
@@ -1177,7 +1175,7 @@ class ThemeRenderer {
   void _doAction(String id, ThemeItem item) {
     switch (id) {
       case 'back':
-        controller.handleBack();
+        Get.back();
         break;
       case 'lock_controls':
         controller.isLocked.value = true;
@@ -1234,9 +1232,13 @@ class ThemeRenderer {
             !controller.isSyncSubsPaneOpened.value;
         break;
       case 'tracks':
-      case 'audio_track':
         controller.isTracksPaneOpened.value =
             !controller.isTracksPaneOpened.value;
+        break;
+      case 'audio':
+      case 'audio_track':
+        controller.isAudioPaneOpened.value =
+            !controller.isAudioPaneOpened.value;
         break;
       case 'quality':
         if (!controller.isOffline.value) {
@@ -1248,7 +1250,7 @@ class ThemeRenderer {
             !controller.isSpeedPaneOpened.value;
         break;
       case 'orientation':
-        if (_isMobile) controller.toggleLandscapeAutoRotate();
+        if (_isMobile) controller.toggleOrientation();
         break;
       case 'aspect_ratio':
         controller.toggleVideoFit();
@@ -1270,31 +1272,11 @@ class ThemeRenderer {
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (sheetCtx) => Container(
-          margin: EdgeInsets.fromLTRB(
-              16, 16, 16, MediaQuery.of(sheetCtx).padding.bottom + 16),
-          height: MediaQuery.of(sheetCtx).size.height * 0.85,
+          height: MediaQuery.of(sheetCtx).size.height,
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: Get.theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Get.theme.colorScheme.outline
-                  .opaque(0.2, iReallyMeanIt: true),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Get.theme.colorScheme.primary
-                    .opaque(0.12, iReallyMeanIt: true),
-                blurRadius: 24,
-                offset: const Offset(0, 4),
-              ),
-              BoxShadow(
-                color: Colors.black.opaque(0.35, iReallyMeanIt: true),
-                blurRadius: 32,
-                offset: const Offset(0, 8),
-              ),
-            ],
+          decoration: const BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: const SettingsPlayer(isModal: true),
         ),
@@ -2342,10 +2324,10 @@ BottomSlotDef _defaultBottomNormal() {
     ],
     right: [
       _yoItem('server'),
-      _yoItem('orientation'),
       _yoItem('quality'),
       _yoItem('speed'),
       _yoItem('audio_track'),
+      _yoItem('orientation'),
       _yoItem('aspect_ratio'),
       _yoItem('time_duration')
     ],
@@ -2386,7 +2368,7 @@ const Map<String, IconData> _iconMap = {
   'speed': Icons.speed_rounded,
   'audio_track': Icons.music_note_rounded,
   'orientation': Icons.screen_rotation_rounded,
-  'aspect_ratio': Icons.fit_screen_rounded,
+  'aspect_ratio': Icons.fit_screen,
   'mega_seek': Icons.fast_forward_rounded,
   'skip_previous_rounded': Icons.skip_previous_rounded,
   'skip_next_rounded': Icons.skip_next_rounded,

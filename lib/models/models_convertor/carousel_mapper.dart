@@ -8,18 +8,25 @@ import 'package:anymex/models/models_convertor/carousel/carousel_data.dart';
 import 'package:anymex/utils/function.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart';
 
+import 'package:anymex/controllers/source/source_controller.dart';
+import 'package:get/get.dart';
+
 extension DMediaMapper on DMedia {
   CarouselData toCarouselData({
     DataVariant variant = DataVariant.extension,
     bool isManga = false,
+    String? sourceId,
   }) {
+    final sourceController = Get.find<SourceController>();
+    final activeSource = isManga
+        ? sourceController.activeMangaSource.value
+        : sourceController.activeSource.value;
     return CarouselData(
         id: url,
         title: title,
         poster: cover,
         extraData: '??',
-        rating: '??',
-        episodes: '??',
+        source: sourceId ?? activeSource?.id,
         releasing: false,
         servicesType: ServicesType.extensions);
   }
@@ -38,10 +45,6 @@ extension OfflineMediaMapper on OfflineMedia {
         servicesType: ServicesType.values[serviceIndex ?? 0],
         extraData:
             (currentChapter?.number ?? currentEpisode?.number ?? 0).toString(),
-        rating: rating,
-        episodes: isManga
-            ? "${currentChapter?.number ?? 0} | ${totalChapters ?? '??'}"
-            : "${currentEpisode?.number ?? 0} | ${totalEpisodes ?? '??'}",
         releasing: status == "RELEASING");
   }
 }
@@ -57,8 +60,6 @@ extension RelationMapper on Relation {
       servicesType: ServicesType.anilist,
       args: type,
       extraData: relationType,
-      rating: averageScore,
-      episodes: "??",
       releasing: status == "RELEASING",
     );
   }
@@ -78,15 +79,7 @@ extension TrackedMediaMapper on TrackedMedia {
           "MANGA" => "${episodeCount ?? "??"} | ${chapterCount ?? "??"}",
           _ => episodeCount ?? "??"
         },
-        rating: rating ?? score,
-        episodes: switch (type) {
-          "ANIME" =>
-            "${episodeCount ?? "??"} | ${releasedEpisodes != null ? releasedEpisodes ?? "??" : totalEpisodes ?? "??"}",
-          "MANGA" => "${episodeCount ?? "??"} | ${chapterCount ?? "??"}",
-          _ => episodeCount ?? "??"
-        },
-        releasing: mediaStatus == "RELEASING",
-        nextAiringEpisode: nextAiringEpisode);
+        releasing: mediaStatus == "RELEASING");
   }
 }
 
@@ -99,10 +92,7 @@ extension MediaMapper on Media {
         servicesType: serviceType,
         poster: poster,
         extraData: rating.toString(),
-        rating: rating.toString(),
-        episodes: isManga ? totalChapters : totalEpisodes,
-        releasing: status == "RELEASING",
-        nextAiringEpisode: nextAiringEpisode);
+        releasing: status == "RELEASING");
   }
 }
 
@@ -114,8 +104,6 @@ extension CommunityMediaMapper on CommunityMedia {
         servicesType: ServicesType.anilist,
         poster: media.poster,
         extraData: media.rating.toString(),
-        rating: media.rating.toString(),
-        episodes: isManga ? media.totalChapters : media.totalEpisodes,
         releasing: media.status == "RELEASING",
         anilistUserId: anilistUserId,
         malUserId: malUserId,

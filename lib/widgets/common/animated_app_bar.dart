@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:anymex/utils/theme_extensions.dart';
-import 'dart:ui';
 
 class AnimatedAppBar extends StatelessWidget {
   final bool isVisible;
@@ -34,8 +32,8 @@ class AnimatedAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusBarHeight = MediaQuery.of(context).padding.top;
-    final appBarHeight = height ?? kToolbarHeight;
+    final statusBarHeight = MediaQuery.paddingOf(context).top;
+    final appBarHeight = height ?? 110.0;
     final appBarContentHeight = appBarHeight + topPadding + bottomPadding;
 
     return AnimatedPositioned(
@@ -51,10 +49,13 @@ class AnimatedAppBar extends StatelessWidget {
           children: [
             SizedBox(height: statusBarHeight),
             if (topPadding > 0) SizedBox(height: topPadding),
-            SizedBox(
-              height: height ?? kToolbarHeight,
-              child: content,
-            ),
+            if (height != null)
+              SizedBox(
+                height: height,
+                child: content,
+              )
+            else
+              content,
             if (bottomPadding > 0) SizedBox(height: bottomPadding),
           ],
         ),

@@ -68,12 +68,18 @@ class SourceMapper {
   }
 
   static Media createMediaFromExtension(DMedia data, ItemType type) {
+    final activeSource = type == ItemType.manga
+        ? sourceController.activeMangaSource.value
+        : type == ItemType.novel
+            ? sourceController.activeNovelSource.value
+            : sourceController.activeSource.value;
     return Media(
       id: data.url ?? '',
       title: data.title ?? '',
       poster: data.cover ?? '',
       mediaType: type,
       serviceType: ServicesType.extensions,
+      sourceId: activeSource?.id,
     );
   }
 
@@ -219,7 +225,7 @@ class SourceMapper {
       }
     }
 
-    if (bestScore < 0.95 &&
+    if (bestScore < 0.96 &&
         romajiTitle.isNotEmpty &&
         _normalizeLight(romajiTitle) != _normalizeLight(englishTitle)) {
       await search(romajiTitle, romajiTitle, false);
@@ -230,12 +236,12 @@ class SourceMapper {
       }
     }
 
-    if (bestScore < 0.9 && synonyms.isNotEmpty) {
+    if (bestScore < 0.96 && synonyms.isNotEmpty) {
       Logger.i(
           "Confidence low (${bestScore.toStringAsFixed(2)}). Trying synonyms...");
       final limitedSynonyms = synonyms.take(3);
       for (final synonym in limitedSynonyms) {
-        if (isInterrupted() || bestScore >= 0.95) break;
+        if (isInterrupted() || bestScore >= 0.96) break;
         if (_isInvalidTitle(synonym)) continue;
         await search(synonym, synonym, false);
       }

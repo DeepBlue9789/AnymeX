@@ -5,91 +5,57 @@ import 'package:anymex/database/data_keys/keys.dart';
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/control_button.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/progress_slider.dart';
-import 'package:anymex/widgets/custom_widgets/custom_text.dart';
+import 'package:anymex/controllers/watchium/watchium_service.dart';
+import 'package:anymex/widgets/watchium/watchium_create_dialog.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:anymex/utils/theme_extensions.dart';
+import 'package:anymex/services/cast/widgets/cast_device_dialog.dart';
 import 'package:get/get.dart';
 
-class BottomControls extends StatefulWidget {
+class BottomControls extends StatelessWidget {
   const BottomControls({super.key});
 
   @override
-  State<BottomControls> createState() => _BottomControlsState();
-}
-
-class _BottomControlsState extends State<BottomControls> {
-  // Cache the expensive JSON decode so it doesn't run on every reactive rebuild.
-  // Re-parsed only when the settings value actually changes.
-  List<String> _leftButtonIds = [];
-  List<String> _rightButtonIds = [];
-  Map<String, dynamic> _buttonConfigs = {};
-  String _cachedJsonString = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _parseButtonConfig();
-  }
-
-  void _parseButtonConfig() {
-    final jsonString = PlayerUiKeys.bottomControlsSettings.get<String>('{}');
-    if (jsonString == _cachedJsonString) return;
-    _cachedJsonString = jsonString;
-    try {
-      final decoded = json.decode(jsonString) as Map<String, dynamic>;
-      _leftButtonIds = List<String>.from(decoded['leftButtonIds'] ?? []);
-      _rightButtonIds = List<String>.from(decoded['rightButtonIds'] ?? []);
-      _buttonConfigs = Map<String, dynamic>.from(decoded['buttonConfigs'] ?? {});
-    } catch (_) {}
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // Re-check config in case it changed while the widget was alive.
-    _parseButtonConfig();
-
     final controller = Get.find<PlayerController>();
     final isDesktop = !Platform.isAndroid && !Platform.isIOS;
 
     return Obx(() {
       if (controller.isLocked.value) {
-        final show = controller.showControls.value;
-        return AnimatedOpacity(
-          opacity: show ? 1.0 : 0.0,
-          duration: controller.overlayAnimationDuration(300),
-          child: IgnorePointer(
-            ignoring: !show,
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.8),
-                  ],
-                ),
+        if (!controller.showControls.value) {
+          return const SizedBox.shrink();
+        }
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black.withValues(alpha: 0.8),
+              ],
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            left: false,
+            right: false,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? 32 : 20,
+                vertical: isDesktop ? 24 : 8,
               ),
-              child: SafeArea(
-                top: false,
-                left: false,
-                right: false,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isDesktop ? 32 : 20,
-                    vertical: isDesktop ? 24 : 8,
-                  ),
-                  child: IgnorePointer(
-                    ignoring: true,
-                    child: Opacity(
-                      opacity: 0.7,
-                      child: Container(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
-                        child: const ProgressSlider(),
-                      ),
-                    ),
+              child: IgnorePointer(
+                ignoring: true,
+                child: Opacity(
+                  opacity: 0.7,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
+                    child: const ProgressSlider(),
                   ),
                 ),
               ),
@@ -171,14 +137,15 @@ class _BottomControlsState extends State<BottomControls> {
     final theme = context.theme;
     final isDark = theme.brightness == Brightness.dark;
 
-    // Only watch the coarse state changes (active/inactive, interval identity).
-    // The countdown progress animation is handled inside _CountdownProgressBar,
-    // which has its own Obx isolated by a RepaintBoundary — so the outer
-    // Material/InkWell/Container does NOT rebuild every second.
     return Obx(() {
       final isCountdownActive = controller.isAutoSkipCountdownActive;
       final interval = controller.currentSkipInterval.value;
       final inSegment = interval != null || isCountdownActive;
+      final progress = isCountdownActive
+          ? 1.0 -
+              (controller.autoSkipCountdownRemaining.value /
+                  PlayerController.autoSkipCountdownSeconds)
+          : 0.0;
 
       return Material(
         borderRadius: BorderRadius.circular(16),
@@ -204,12 +171,24 @@ class _BottomControlsState extends State<BottomControls> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Isolated fill bar — only this widget rebuilds each second.
                 if (isCountdownActive)
                   Positioned.fill(
-                    child: _CountdownProgressBar(
-                      controller: controller,
-                      fillColor: theme.colorScheme.primary.withValues(alpha: 0.25),
+                    child: TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 1000),
+                      curve: Curves.linear,
+                      tween: Tween<double>(begin: 0.0, end: progress),
+                      builder: (context, value, child) {
+                        return FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: value,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.25),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 Padding(
@@ -231,8 +210,8 @@ class _BottomControlsState extends State<BottomControls> {
                             size: 20,
                           ),
                         ),
-                      AnymexText(
-                        text: controller.skipButtonLabel,
+                      AnymeXText(
+                        controller.skipButtonLabel,
                         variant: TextVariant.semiBold,
                         color: controller.isLocked.value
                             ? theme.colorScheme.onSurface.opaque(0.4)
@@ -248,62 +227,24 @@ class _BottomControlsState extends State<BottomControls> {
       );
     });
   }
-}
 
-/// A self-contained fill bar for the skip countdown.
-/// Keeps its own Obx that only watches [autoSkipCountdownRemaining] so
-/// the parent skip-button widget never rebuilds on each countdown tick.
-class _CountdownProgressBar extends StatelessWidget {
-  final PlayerController controller;
-  final Color fillColor;
-
-  const _CountdownProgressBar({
-    required this.controller,
-    required this.fillColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: Obx(() {
-        final remaining = controller.autoSkipCountdownRemaining.value;
-        final progress = 1.0 -
-            (remaining / PlayerController.autoSkipCountdownSeconds);
-        return TweenAnimationBuilder<double>(
-          duration: const Duration(milliseconds: 950),
-          curve: Curves.linear,
-          tween: Tween<double>(begin: progress - (1.0 / PlayerController.autoSkipCountdownSeconds), end: progress),
-          builder: (context, value, _) {
-            return FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: value.clamp(0.0, 1.0),
-              child: Container(
-                decoration: BoxDecoration(color: fillColor),
-              ),
-            );
-          },
-        );
-      }),
-    );
-  }
-}
-
-// _buildLayout lives back in _BottomControlsState — it accesses _leftButtonIds etc.
-extension _BottomControlsStateLayout on _BottomControlsState {
   Widget _buildLayout(BuildContext context) {
     final controller = Get.find<PlayerController>();
     final theme = context.theme;
     final isDark = theme.brightness == Brightness.dark;
 
-    // Use the cached config — no JSON decode on every rebuild.
-    final List<String> leftButtonIds = _leftButtonIds;
-    final List<String> rightButtonIds = _rightButtonIds;
-    final Map<String, dynamic> buttonConfigs = _buttonConfigs;
+    final String jsonString =
+        PlayerUiKeys.bottomControlsSettings.get<String>('{}');
+    final Map<String, dynamic> decodedConfig = json.decode(jsonString);
 
+    final List<String> leftButtonIds =
+        List<String>.from(decodedConfig['leftButtonIds'] ?? []);
+    final List<String> rightButtonIds =
+        List<String>.from(decodedConfig['rightButtonIds'] ?? []);
+    final Map<String, dynamic> buttonConfigs =
+        Map<String, dynamic>.from(decodedConfig['buttonConfigs'] ?? {});
     bool isVisible(String id) =>
         (buttonConfigs[id]?['visible'] as bool?) ?? true;
-
-    final serverCount = controller.episodeTracks.length;
 
     final Map<String, Widget> buttonWidgets = {
       'playlist': ControlButton(
@@ -322,21 +263,30 @@ extension _BottomControlsStateLayout on _BottomControlsState {
         compact: true,
       ),
       'source': ControlButton(
-        icon: Icons.cloud_rounded,
+        icon: Icons.high_quality_rounded,
         onPressed: () {
           controller.isSourcePaneOpened.value =
               !controller.isSourcePaneOpened.value;
         },
-        tooltip: 'Source',
+        tooltip: 'Quality',
         compact: true,
       ),
       'tracks': ControlButton(
-        icon: Icons.library_music_rounded,
+        icon: Icons.subtitles_rounded,
         onPressed: () {
           controller.isTracksPaneOpened.value =
               !controller.isTracksPaneOpened.value;
         },
-        tooltip: 'Tracks',
+        tooltip: 'Subtitles',
+        compact: true,
+      ),
+      'audio': ControlButton(
+        icon: Icons.volume_up_rounded,
+        onPressed: () {
+          controller.isAudioPaneOpened.value =
+              !controller.isAudioPaneOpened.value;
+        },
+        tooltip: 'Audio',
         compact: true,
       ),
       'sync_subs': ControlButton(
@@ -358,21 +308,64 @@ extension _BottomControlsStateLayout on _BottomControlsState {
         compact: true,
       ),
       'orientation': Obx(() {
-        final autoRotate = controller.isLandscapeAutoRotateEnabled.value;
+        final orientation = controller.physicalOrientation.value;
+        double angle = 0.0;
+        IconData icon = Icons.smartphone_rounded;
+        if (orientation == DeviceOrientation.landscapeLeft) {
+          icon = Icons.rotate_left_rounded;
+        } else if (orientation == DeviceOrientation.landscapeRight) {
+          icon = Icons.rotate_right_rounded;
+        } else if (orientation == DeviceOrientation.portraitDown) {
+          angle = 3.14159265359;
+        }
         return ControlButton(
-          icon: autoRotate
-              ? Icons.screen_rotation_alt_rounded
-              : Icons.screen_lock_rotation_rounded,
-          onPressed: () => controller.toggleLandscapeAutoRotate(),
-          tooltip: autoRotate ? 'Auto-rotate ON' : 'Auto-rotate OFF',
+          icon: icon,
+          rotationAngle: angle,
+          onPressed: () => controller.toggleOrientation(),
+          tooltip: 'Toggle Orientation',
           compact: true,
         );
       }),
       'aspect_ratio': ControlButton(
-        icon: Icons.fit_screen_rounded,
+        icon: Icons.fit_screen,
         onPressed: () => controller.toggleVideoFit(),
         onLongPress: controller.resetVideoFit,
         tooltip: 'Aspect Ratio',
+        compact: true,
+      ),
+      'external_player': ControlButton(
+        icon: Icons.launch_rounded,
+        onPressed: () => controller.launchExternalPlayer(),
+        tooltip: 'External Player',
+        compact: true,
+      ),
+      // 'watch_together': Obx(() {
+      //   final watchium = Get.find<WatchiumService>();
+      //   return ControlButton(
+      //     icon: watchium.inRoom.value
+      //         ? Icons.people_rounded
+      //         : Icons.people_outline_rounded,
+      //     onPressed: () {
+      //       if (watchium.inRoom.value) {
+      //         watchium.isPartyPaneOpened.value =
+      //             !watchium.isPartyPaneOpened.value;
+      //       } else {
+      //         showWatchiumCreateSheet(
+      //           context: Get.context!,
+      //           playerController: controller,
+      //         );
+      //       }
+      //     },
+      //     tooltip: watchium.inRoom.value
+      //         ? 'Watch Together (In Room)'
+      //         : 'Watch Together',
+      //     compact: true,
+      //   );
+      // }),
+      'cast': ControlButton(
+        icon: Icons.cast_rounded,
+        onPressed: () => CastDeviceDialog.show(context, controller),
+        tooltip: 'Cast to Device',
         compact: true,
       ),
     };
@@ -383,21 +376,18 @@ extension _BottomControlsStateLayout on _BottomControlsState {
 
       for (var id in ids) {
         if (!isVisible(id)) continue;
-        if (id == 'source' &&
-            (controller.isOffline.value ||
-                (serverCount <= 1 &&
-                    controller.getCurrentStreamSubtitleOptions().isEmpty)))
-          continue;
-        if (id == 'tracks' &&
-            (controller.embeddedAudioTracks.value.isEmpty &&
-                controller.embeddedSubs.value.isEmpty)) continue;
         if (id == 'orientation' && !(Platform.isAndroid || Platform.isIOS)) {
+          continue;
+        }
+        if (id == 'watch_together' && controller.isOffline.value) {
           continue;
         }
 
         final widget = buttonWidgets[id];
         if (widget != null) {
-          if ((widget is ControlButton && widget.compact) || id == 'orientation') {
+          if (id == 'orientation' ||
+              id == 'watch_together' ||
+              (widget is ControlButton && widget.compact)) {
             compactButtons.add(widget);
           } else {
             regularButtons.add(widget);
@@ -433,7 +423,7 @@ extension _BottomControlsStateLayout on _BottomControlsState {
     final rightButtons = buildButtonList(rightButtonIds);
 
     final isPortrait =
-        MediaQuery.of(context).orientation == Orientation.portrait;
+        MediaQuery.orientationOf(context) == Orientation.portrait;
 
     if (isPortrait) {
       return Column(
@@ -471,16 +461,14 @@ extension _BottomControlsStateLayout on _BottomControlsState {
                       width: 0.5,
                     ),
                   ),
-                  child: RepaintBoundary(
-                    child: Obx(() => Text(
-                          controller.formattedCurrentPosition,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        )),
-                  ),
+                  child: Obx(() => AnymeXText(
+                        controller.formattedCurrentPosition,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      )),
                 ),
                 Container(
                   padding:
@@ -497,16 +485,14 @@ extension _BottomControlsStateLayout on _BottomControlsState {
                       width: 0.5,
                     ),
                   ),
-                  child: RepaintBoundary(
-                    child: Obx(() => Text(
-                          controller.formattedEpisodeDuration,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        )),
-                  ),
+                  child: Obx(() => AnymeXText(
+                        controller.formattedEpisodeDuration,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      )),
                 ),
               ],
             ),
@@ -566,16 +552,14 @@ extension _BottomControlsStateLayout on _BottomControlsState {
                         width: 0.5,
                       ),
                     ),
-                    child: RepaintBoundary(
-                      child: Obx(() => Text(
-                            controller.formattedCurrentPosition,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          )),
-                    ),
+                    child: Obx(() => AnymeXText(
+                          controller.formattedCurrentPosition,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        )),
                   ),
                   if (leftButtons.isNotEmpty) const SizedBox(width: 16),
                   ...leftButtons,
@@ -601,16 +585,14 @@ extension _BottomControlsStateLayout on _BottomControlsState {
                         width: 0.5,
                       ),
                     ),
-                    child: RepaintBoundary(
-                      child: Obx(() => Text(
-                            controller.formattedEpisodeDuration,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          )),
-                    ),
+                    child: Obx(() => AnymeXText(
+                          controller.formattedEpisodeDuration,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        )),
                   ),
                 ],
               ),

@@ -1,6 +1,10 @@
+import 'dart:io';
+import 'dart:math' as math;
+
 import 'package:anymex/widgets/helper/platform_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 
 OverlayEntry? _currentSnackBar;
 
@@ -24,6 +28,7 @@ void snackBar(
   Color? iconColor,
   bool showCloseButton = false,
   bool showDurationAnimation = true,
+  VoidCallback? onTap,
 }) {
   final navigatorContext = Get.key.currentContext ?? Get.context;
   final theme = navigatorContext != null
@@ -48,7 +53,7 @@ void snackBar(
           title == null || title.isEmpty ? message : '$title: $message';
       messenger.showSnackBar(
         SnackBar(
-          content: Text(fallbackMessage),
+          content: AnymeXText(fallbackMessage),
           duration: Duration(milliseconds: duration),
         ),
       );
@@ -69,7 +74,10 @@ void snackBar(
       message: message,
       title: title,
       backgroundColor: backgroundColor,
-      position: snackPosition ?? SnackPosition.TOP,
+      position: snackPosition ??
+          getResponsiveValue(context,
+              mobileValue: SnackPosition.BOTTOM,
+              desktopValue: SnackPosition.TOP),
       maxLines: maxLines,
       icon: icon,
       iconColor: iconColor,
@@ -80,6 +88,7 @@ void snackBar(
       onDismiss: () {
         _removeSnackBarEntry(entry);
       },
+      onTap: onTap,
     ),
   );
   _currentSnackBar = entry;
@@ -101,6 +110,7 @@ class _SnackBarWidget extends StatefulWidget {
     required this.duration,
     required this.theme,
     required this.onDismiss,
+    this.onTap,
   });
 
   final String message;
@@ -115,6 +125,7 @@ class _SnackBarWidget extends StatefulWidget {
   final Duration duration;
   final ThemeData theme;
   final VoidCallback onDismiss;
+  final VoidCallback? onTap;
 
   @override
   State<_SnackBarWidget> createState() => _SnackBarWidgetState();
@@ -193,7 +204,7 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
   void _dismissWithSwipe(double direction) {
     if (!mounted || _hasDismissed) return;
     _hasDismissed = true;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
     setState(() {
       _dragOffset = direction >= 0 ? screenWidth * 1.5 : -screenWidth * 1.5;
@@ -218,18 +229,20 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
 
   double get _swipeFadeOpacity {
     if (_dragOffset == 0.0) return 1.0;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final ratio = (_dragOffset.abs() / (screenWidth * 0.45)).clamp(0.0, 1.0);
     return 1.0 - ratio;
   }
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.of(context).padding.top;
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-    final w = MediaQuery.of(context).size.width;
+    final topPad = MediaQuery.paddingOf(context).top;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+    final w = MediaQuery.sizeOf(context).width;
     final maxWidth =
         getResponsiveSize(context, mobileSize: w - 32.0, desktopSize: w * 0.38);
+
+    final windowsTopOffset = (_isTop && Platform.isWindows) ? 40.0 : 0.0;
 
     return Positioned.fill(
       child: AnimatedBuilder(
@@ -242,7 +255,7 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
               alignment: _isTop ? Alignment.topCenter : Alignment.bottomCenter,
               child: Padding(
                 padding: EdgeInsets.only(
-                  top: _isTop ? topPad + 16 : 0,
+                  top: _isTop ? topPad + 16 + windowsTopOffset : 0,
                   bottom: _isTop ? 0 : bottomPad + 24,
                   left: 16,
                   right: 16,
@@ -278,7 +291,12 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
     final cs = widget.theme.colorScheme;
 
     return GestureDetector(
-      onTap: _dismiss,
+      onTap: () {
+        if (widget.onTap != null) {
+          widget.onTap!();
+        }
+        _dismiss();
+      },
       onHorizontalDragStart: (_) {
         _isDragging = true;
         _progressController.stop();
@@ -306,7 +324,7 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
         child: Container(
           decoration: BoxDecoration(
             color: _bgColor,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: cs.outline.withOpacity(0.1),
               width: 1,
@@ -314,17 +332,23 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.12),
-                blurRadius: 16,
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: _accentColor.withOpacity(0.06),
+                blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildBody(cs),
+                if (widget.showDurationAnimation) _buildTimerBar(),
               ],
             ),
           ),
@@ -335,48 +359,209 @@ class _SnackBarWidgetState extends State<_SnackBarWidget>
 
   Widget _buildBody(ColorScheme cs) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (widget.icon != null) ...[
-            Icon(widget.icon, size: 20, color: _accentColor),
-            const SizedBox(width: 8),
+            _IconBubble(
+              icon: widget.icon!,
+              color: _accentColor,
+              bgColor: _accentColor.withOpacity(0.12),
+            ),
+            const SizedBox(width: 12),
           ],
-          Flexible(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.title != null) ...[
-                  Text(
+                  AnymeXText(
                     widget.title!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: widget.theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    style: widget.theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                       color: cs.onSurface,
+                      height: 1.2,
                     ),
                   ),
+                  const SizedBox(height: 3),
                 ],
-                Text(
+                AnymeXText(
                   widget.message,
                   maxLines: widget.maxLines,
                   overflow: TextOverflow.ellipsis,
-                  style: widget.theme.textTheme.labelMedium?.copyWith(
+                  style: widget.theme.textTheme.bodySmall?.copyWith(
                     color: cs.onSurface
-                        .withOpacity(widget.title != null ? 0.7 : 1.0),
-                    fontWeight: FontWeight.w600,
+                        .withOpacity(widget.title != null ? 0.65 : 0.85),
+                    height: 1.4,
                   ),
                 ),
               ],
             ),
           ),
+          if (widget.showCloseButton) ...[
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: _dismiss,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 15,
+                  color: cs.onSurface.withOpacity(0.5),
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(width: 10),
+            if (widget.showDurationAnimation)
+              AnimatedBuilder(
+                animation: _progressAnimation,
+                builder: (_, __) => _ArcTimer(
+                  progress: _progressAnimation.value,
+                  color: _accentColor,
+                  size: 26,
+                ),
+              ),
+          ],
         ],
       ),
     );
   }
+
+  Widget _buildTimerBar() {
+    return AnimatedBuilder(
+      animation: _progressAnimation,
+      builder: (_, __) {
+        return SizedBox(
+          height: 3,
+          child: Stack(
+            children: [
+              Container(color: _accentColor.withOpacity(0.08)),
+              FractionallySizedBox(
+                widthFactor: _progressAnimation.value,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        _accentColor.withOpacity(0.9),
+                        _accentColor.withOpacity(0.4),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _IconBubble extends StatelessWidget {
+  const _IconBubble({
+    required this.icon,
+    required this.color,
+    required this.bgColor,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color bgColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Icon(icon, size: 19, color: color),
+    );
+  }
+}
+
+class _ArcTimer extends StatelessWidget {
+  const _ArcTimer({
+    required this.progress,
+    required this.color,
+    required this.size,
+  });
+
+  final double progress;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _ArcTimerPainter(progress: progress, color: color),
+      ),
+    );
+  }
+}
+
+class _ArcTimerPainter extends CustomPainter {
+  const _ArcTimerPainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width / 2) - 2.5;
+
+    final trackPaint = Paint()
+      ..color = color.withOpacity(0.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+
+    final arcPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawCircle(center, radius, trackPaint);
+
+    if (progress > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -math.pi / 2,
+        2 * math.pi * progress,
+        false,
+        arcPaint,
+      );
+    }
+
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final dotAngle = -math.pi / 2 + (2 * math.pi * progress);
+    final dotX = center.dx + radius * math.cos(dotAngle);
+    final dotY = center.dy + radius * math.sin(dotAngle);
+    canvas.drawCircle(Offset(dotX, dotY), 2.8, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(_ArcTimerPainter old) => old.progress != progress;
 }
 
 void successSnackBar(
@@ -417,6 +602,7 @@ void infoSnackBar(
   String? title,
   int duration = 2500,
   bool showDurationAnimation = true,
+  VoidCallback? onTap,
 }) {
   snackBar(
     message,
@@ -425,6 +611,7 @@ void infoSnackBar(
     icon: Icons.info_outline_rounded,
     iconColor: const Color(0xFF42A5F5),
     showDurationAnimation: showDurationAnimation,
+    onTap: onTap,
   );
 }
 

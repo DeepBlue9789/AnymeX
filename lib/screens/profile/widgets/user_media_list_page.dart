@@ -5,13 +5,17 @@ import 'package:anymex/models/Anilist/anilist_media_user.dart';
 import 'package:anymex/models/Anilist/anilist_profile.dart';
 import 'package:anymex/screens/anime/details_page.dart';
 import 'package:anymex/screens/manga/details_page.dart';
+import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart';
+import 'package:anymex/screens/novel/details/details_view.dart';
 import 'package:anymex/utils/function.dart';
-import 'package:anymex/widgets/common/glow.dart';
+import 'package:anymex/widgets/common/anymex_scaffold.dart';
 import 'package:anymex/widgets/media_items/media_item.dart';
-import 'package:anymex/widgets/custom_widgets/anymex_progress.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_progress.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:anymex/widgets/common/cards/card_gate.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 
 const _animeStandardOrder = [
   'Watching',
@@ -282,7 +286,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
 
     final media = CardData.fromTrackedMedia(random);
     navigate(() => isManga
-        ? MangaDetailsPage(media: media.data, tag: media.title)
+        ? (media.data.mediaType == ItemType.novel ? NovelDetailsPage(media: media.data) : MangaDetailsPage(media: media.data, tag: media.title))
         : AnimeDetailsPage(media: media.data, tag: media.title));
   }
 
@@ -315,7 +319,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                   children: [
                     Icon(Icons.sort_rounded, color: colors.primary, size: 20),
                     const SizedBox(width: 10),
-                    Text('Sort By',
+                    AnymeXText('Sort By',
                         style: TextStyle(
                           fontSize: 16,
                           fontFamily: 'Poppins-Bold',
@@ -334,7 +338,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                             : Icons.arrow_downward_rounded,
                         size: 16,
                       ),
-                      label: Text(_sortAscending ? 'Ascending' : 'Descending',
+                      label: AnymeXText(_sortAscending ? 'Ascending' : 'Descending',
                           style: const TextStyle(fontSize: 12)),
                     ),
                   ],
@@ -359,7 +363,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                   leading: Icon(icon,
                       color:
                           selected ? colors.primary : colors.onSurfaceVariant),
-                  title: Text(label,
+                  title: AnymeXText(label,
                       style: TextStyle(
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
@@ -399,7 +403,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
         builder: (ctx, setSheetState) => SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.6,
+              maxHeight: MediaQuery.sizeOf(context).height * 0.6,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -420,7 +424,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                     children: [
                       Icon(Iconsax.filter, color: colors.primary, size: 20),
                       const SizedBox(width: 10),
-                      Text('Filter by Genre',
+                      AnymeXText('Filter by Genre',
                           style: TextStyle(
                             fontSize: 16,
                             fontFamily: 'Poppins-Bold',
@@ -432,7 +436,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                         TextButton(
                           onPressed: () =>
                               setSheetState(() => tempSelected.clear()),
-                          child: const Text('Clear',
+                          child: const AnymeXText('Clear',
                               style: TextStyle(fontSize: 12)),
                         ),
                     ],
@@ -447,7 +451,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                       children: sortedGenres.map((genre) {
                         final isSelected = tempSelected.contains(genre);
                         return FilterChip(
-                          label: Text(genre,
+                          label: AnymeXText(genre,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -498,7 +502,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14))),
-                      child: Text(
+                      child: AnymeXText(
                         tempSelected.isEmpty
                             ? 'Show All'
                             : 'Apply (${tempSelected.length})',
@@ -521,39 +525,35 @@ class _UserMediaListPageState extends State<UserMediaListPage>
     final typeLabel = widget.type == 'ANIME' ? 'Anime' : 'Manga';
 
     if (_loading) {
-      return Glow(
-        child: Scaffold(
-          appBar: AppBar(
+      return AnymeXScaffold(
+  appBar: AppBar(
             leading: IconButton(
               onPressed: () => Navigator.pop(context),
               icon: Icon(Icons.arrow_back_ios_new, color: colors.primary),
             ),
-            title: Text(
+            title: AnymeXText(
               "${widget.userName}'s $typeLabel List",
               style: TextStyle(fontSize: 16, color: colors.primary),
             ),
           ),
-          body: const Center(child: AnymexProgressIndicator()),
-        ),
-      );
+  body: const Center(child: AnymeXProgressIndicator())
+);
     }
 
     if (_lists.isEmpty || _tabNames.isEmpty) {
-      return Glow(
-        child: Scaffold(
-          appBar: AppBar(
+      return AnymeXScaffold(
+  appBar: AppBar(
             leading: IconButton(
               onPressed: () => Navigator.pop(context),
               icon: Icon(Icons.arrow_back_ios_new, color: colors.primary),
             ),
-            title: Text(
+            title: AnymeXText(
               "${widget.userName}'s $typeLabel List",
               style: TextStyle(fontSize: 16, color: colors.primary),
             ),
           ),
-          body: const Center(child: Text('No entries found')),
-        ),
-      );
+  body: const Center(child: AnymeXText('No entries found'))
+);
     }
 
     final tabs = _isReversed ? _tabNames.reversed.toList() : _tabNames;
@@ -563,15 +563,14 @@ class _UserMediaListPageState extends State<UserMediaListPage>
       _tabController = TabController(length: tabs.length, vsync: this);
     }
 
-    return Glow(
-      child: Scaffold(
-        appBar: AppBar(
+    return AnymeXScaffold(
+  appBar: AppBar(
           titleSpacing: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             icon: Icon(Icons.arrow_back_ios_new, color: colors.primary),
           ),
-          title: Text(
+          title: AnymeXText(
             "${widget.userName}'s $typeLabel List",
             style: TextStyle(fontSize: 16, color: colors.primary),
           ),
@@ -592,25 +591,22 @@ class _UserMediaListPageState extends State<UserMediaListPage>
               ),
               tooltip: _searchOpen ? 'Close search' : 'Search',
             ),
-            // Random
-            IconButton(
+                        IconButton(
               onPressed: _openRandom,
               icon: const Icon(Iconsax.shuffle, size: 20),
               tooltip: 'Random',
             ),
-            // Genre filter
-            IconButton(
+                        IconButton(
               onPressed: () => _showGenreFilter(context),
               icon: Badge(
                 isLabelVisible: _selectedGenres.isNotEmpty,
-                label: Text('${_selectedGenres.length}',
+                label: AnymeXText('${_selectedGenres.length}',
                     style: const TextStyle(fontSize: 9)),
                 child: const Icon(Iconsax.filter, size: 20),
               ),
               tooltip: 'Filter genres',
             ),
-            // 3-dot menu
-            PopupMenuButton<String>(
+                        PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert_rounded, size: 22),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
@@ -635,7 +631,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                       Icon(Icons.sort_rounded,
                           size: 20, color: colors.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      const Text('Sort'),
+                      const AnymeXText('Sort'),
                     ],
                   ),
                 ),
@@ -646,7 +642,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                       Icon(Iconsax.arrow_swap_horizontal,
                           size: 20, color: colors.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Text(_isReversed ? 'Default tab order' : 'Reverse tabs'),
+                      AnymeXText(_isReversed ? 'Default tab order' : 'Reverse tabs'),
                     ],
                   ),
                 ),
@@ -727,7 +723,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                     return Tab(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 300),
-                        child: Text(
+                        child: AnymeXText(
                           label,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
@@ -743,7 +739,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
             ),
           ),
         ),
-        body: TabBarView(
+  body: TabBarView(
           controller: _tabController,
           children: tabs.map((name) {
             final items = _applyFilters(_lists[name] ?? []);
@@ -757,7 +753,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
                         size: 40,
                         color: colors.onSurfaceVariant.withOpacity(0.3)),
                     const SizedBox(height: 12),
-                    Text(
+                    AnymeXText(
                       _searchQuery.isNotEmpty || _selectedGenres.isNotEmpty
                           ? 'No matches found'
                           : 'No entries in $name',
@@ -769,16 +765,23 @@ class _UserMediaListPageState extends State<UserMediaListPage>
               );
             }
 
+            final crossAxisCount = getResponsiveCrossAxisVal(
+                MediaQuery.sizeOf(context).width,
+                itemWidth: 115);
+
             return GridView.builder(
               padding: const EdgeInsets.all(10),
               physics: const BouncingScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: getResponsiveCrossAxisVal(
-                  MediaQuery.of(context).size.width,
-                  itemWidth: 108,
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: getGridCardAspectRatio(
+                  context: context,
+                  crossAxisCount: crossAxisCount,
+                  spacing: 10,
+                  padding: 20,
                 ),
-                mainAxisExtent: 250,
                 crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
               ),
               itemCount: items.length,
               itemBuilder: (context, index) {
@@ -790,8 +793,7 @@ class _UserMediaListPageState extends State<UserMediaListPage>
               },
             );
           }).toList(),
-        ),
-      ),
-    );
+        )
+);
   }
 }

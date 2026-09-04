@@ -1,9 +1,11 @@
 import 'package:anymex/database/kv_helper.dart';
 export 'package:anymex/database/kv_helper.dart';
+export 'watchium_keys.dart';
 
 enum General {
   shouldAskForTrack,
   hideAdultContent,
+  searchIsAdult,
   uiScaler,
   isFirstTime,
   hasAcceptedCommentRules,
@@ -26,6 +28,11 @@ enum General {
   hasJoinedNewDiscord,
   discordRpcEnabled,
   useHighRefreshRate,
+  preferredDisplayMode,
+  navigationTabOrder,
+  useAlternateTitle,
+  unifiedLibrary,
+  joinDialogShowCount,
 }
 
 enum ThemeKeys {
@@ -36,9 +43,10 @@ enum ThemeKeys {
   themeMode,
   customColorIndex,
   logoAnimationType,
+  customHexColor,
 }
 
-enum PlayerKeys { useLibass, useMediaKit, autoRotateEnabled }
+enum PlayerKeys { useLibass, useMediaKit, useExternalPlayer, audioChannelLayout }
 
 enum PlayerUiKeys {
   playerExperimentalEnabled,
@@ -60,6 +68,7 @@ enum PlayerUiKeys {
 
 enum ReaderKeys {
   readerControlTheme,
+  chapterStyle,
   readingLayout,
   readingDirection,
   imageWidth,
@@ -91,6 +100,8 @@ enum ReaderKeys {
   displayRefreshInterval,
   displayRefreshColor,
   imageFilterQuality,
+  fitToScreen,
+  navigateByNumber,
 }
 
 enum NovelReaderKeys {
@@ -137,13 +148,6 @@ enum SyncKeys {
   gistGithubUsername,
   gistAutoDeleteCompleted,
   gistExitSyncNotifications,
-  syncProvider,
-  pocketbaseUrl,
-  pocketbaseEmail,
-  pocketbasePassword,
-  pocketbaseToken,
-  pocketbaseUserId,
-  pocketbaseAutoSyncHistory,
 }
 
 enum SourceKeys {
@@ -166,6 +170,7 @@ enum PluginKeys {
   runtimeHostInstalledVersion,
   runtimeHostInstalledReleaseTitle,
   bridgeMode,
+  useInternalExtensionLoading,
 }
 
 enum AuthKeys {
@@ -174,9 +179,7 @@ enum AuthKeys {
   malRefreshToken,
   simklAuthToken,
   malSessionId,
-  anilistCachedProfileJson,
-  anilistCachedUsername,
-  anilistCachedAvatar,
+  mangaBakaAuthToken,
 }
 
 enum SearchKeys { novelSearchedQueries }
@@ -205,19 +208,19 @@ enum DynamicKeys {
   mappedMediaTitle,
   offlineVideoProgress,
   stickySource,
-  preferredServer,
-  preferredSubtitle;
+  stickyServer,
+  trackBindings;
 
   T get<T>(dynamic id, [T? defaultValue]) {
     return KvHelper.get<T>('${name}_$id', defaultVal: defaultValue);
   }
 
-  Future<void> set<T>(dynamic id, T value) async {
-    await KvHelper.set('${name}_$id', value);
+  void set<T>(dynamic id, T value) {
+    KvHelper.set('${name}_$id', value);
   }
 
-  Future<void> delete(dynamic id) async {
-    await KvHelper.remove('${name}_$id');
+  void delete(dynamic id) {
+    KvHelper.remove('${name}_$id');
   }
 }
 
@@ -247,6 +250,7 @@ enum PlayerSettingsKeys {
   autoTranslate,
   translateTo,
   autoSkipFiller,
+  enableScreenshot,
   subtitleOpacity,
   subtitleBottomMargin,
   subtitleOutlineType,
@@ -254,8 +258,10 @@ enum PlayerSettingsKeys {
   hardwareDecoder,
   preferredSubtitleLanguage,
   videoOutput,
-  enableGestureSafeZones,
-  gestureSafeZoneMargin,
+  audioOutput,
+  enableHoldToSeek,
+  enableSlideToSeek,
+  useMediaSession,
 }
 
 enum UISettingsKeys {
@@ -275,6 +281,7 @@ enum UISettingsKeys {
   enableAnimation,
   disableGradient,
   homePageCardsMal,
+  homePageCardsSimkl,
   cardStyle,
   historyCardStyle,
   liquidMode,
@@ -284,6 +291,14 @@ enum UISettingsKeys {
   enablePosterKenBurns,
   carouselStyle,
   showContinueWatchingCard,
+  useLegacyHeader,
+  useGrainTexture,
+  grainIntensity,
+  enableImmersiveMode,
+  navBarStyle,
+  appFontFamily,
+  bottomNavBarMargin,
+  useLegacyNavbar,
 }
 
 enum DownloadKeys {

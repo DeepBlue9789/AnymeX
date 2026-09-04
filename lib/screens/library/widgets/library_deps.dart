@@ -1,14 +1,23 @@
+import 'package:anymex/database/data_keys/keys.dart';
+import 'package:anymex/controllers/service_handler/service_handler.dart';
 import 'package:anymex/controllers/settings/methods.dart';
 import 'package:anymex/controllers/settings/settings.dart';
+import 'package:anymex/screens/library/controller/library_controller.dart';
+import 'package:anymex/screens/library/editor/list_editor.dart';
+import 'package:anymex/widgets/common/anymex_pills.dart';
+import 'package:anymex/utils/function.dart';
 import 'package:anymex/utils/theme_extensions.dart';
-import 'package:anymex/widgets/common/slider_semantics.dart';
-import 'package:anymex/widgets/custom_widgets/custom_icon_wrapper.dart';
-import 'package:anymex/widgets/custom_widgets/custom_text.dart';
+import 'package:anymex/widgets/common/anymex_slider_m3.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_tabbar.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_icon_wrapper.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 import 'package:anymex/widgets/helper/tv_wrapper.dart';
+import 'package:anymex_extension_runtime_bridge/Models/Source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:iconsax/iconsax.dart';
 
 class CustomSearchBar extends StatefulWidget {
   final TextEditingController? controller;
@@ -151,13 +160,13 @@ class CustomSliderTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                AnymexIcon(icon, size: 30, color: context.colors.primary),
+                AnymeXIcon(icon, size: 30, color: context.colors.primary),
                 const SizedBox(width: 20),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      AnymeXText(
                         title,
                         style: TextStyle(
                           fontSize: 16,
@@ -166,7 +175,7 @@ class CustomSliderTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 5),
-                      Text(
+                      AnymeXText(
                         description,
                         style: TextStyle(
                           fontSize: 14,
@@ -186,8 +195,7 @@ class CustomSliderTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10.0),
               child: Row(
                 children: [
-                  AnymexText(
-                    text: sliderValue.toInt() == 0
+                  AnymeXText(sliderValue.toInt() == 0
                         ? 'Auto'
                         : (sliderValue % 1 == 0
                             ? sliderValue.toInt().toString()
@@ -196,7 +204,7 @@ class CustomSliderTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: CustomSlider(
+                    child: AnymeXSliderM3(
                       focusNode: FocusNode(
                           canRequestFocus: false, skipTraversal: true),
                       value: double.parse(sliderValue.toStringAsFixed(1)),
@@ -204,20 +212,12 @@ class CustomSliderTile extends StatelessWidget {
                       max: max,
                       min: min,
                       label: label ?? sliderValue.toInt().toString(),
-                      onDragEnd: onChangedEnd,
-                      glowBlurMultiplier: 1,
-                      glowSpreadMultiplier: 1,
+                      onChangeEnd: onChangedEnd,
                       divisions: divisions?.toInt() ?? (max * 10).toInt(),
-                      customValueIndicatorSize: RoundedSliderValueIndicator(
-                          context.colors,
-                          width: 40,
-                          height: 40,
-                          radius: 50),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  AnymexText(
-                    text: max % 1 == 0
+                  AnymeXText(max % 1 == 0
                         ? max.toInt().toString()
                         : max.toStringAsFixed(1),
                     variant: TextVariant.semiBold,
@@ -229,5 +229,156 @@ class CustomSliderTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class ChipTabs extends StatelessWidget {
+  final LibraryController controller;
+
+  const ChipTabs({super.key, required this.controller});
+
+
+  Widget _buildSettingsButton(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: () => navigate(
+          () => CustomListsEditor(type: controller.type.value)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest.opaque(0.3, iReallyMeanIt: true),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: colors.onSurface.opaque(0.08, iReallyMeanIt: true),
+            width: 0.5,
+          ),
+        ),
+        child: Icon(
+          Iconsax.setting,
+          size: 16,
+          color: context.colors.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = Get.find<Settings>();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
+      child: Obx(() {
+        final lists = controller.customLists;
+        final selectedIndex = controller.selectedListIndex.value;
+        final isUnified = General.unifiedLibrary.get<bool>(true);
+        final isLegacy = settings.useLegacyNavbar;
+
+        final pillItems = <PillItem>[];
+        if (isLegacy) {
+          pillItems.add(
+            PillItem(
+              icon: Iconsax.clock,
+              label: 'History',
+              isSelected: selectedIndex == -1,
+              onTap: () => controller.selectList(-1),
+            ),
+          );
+        }
+
+        for (int i = 0; i < lists.length; i++) {
+          final list = lists[i];
+          final listName = list.listName ?? '';
+          final itemCount = list.mediaIds?.length ?? 0;
+          final isSelected = selectedIndex == i;
+
+          if (!isUnified && itemCount == 0 && !isSelected) {
+            continue;
+          }
+
+          pillItems.add(
+            PillItem(
+              label: '$listName ($itemCount)',
+              isSelected: isSelected,
+              onTap: () => controller.selectList(i),
+            ),
+          );
+        }
+
+        return Row(
+          children: [
+            _buildSettingsButton(context),
+            const SizedBox(width: 8),
+            Expanded(
+              child: AnymeXPills(
+                scrollPadding: EdgeInsets.zero,
+                items: pillItems,
+              ),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+class LibrarySegmentedControl extends StatelessWidget {
+  final LibraryController controller;
+
+  const LibrarySegmentedControl({super.key, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final availableTypes =
+          serviceHandler.serviceType.value == ServicesType.simkl
+              ? [ItemType.anime]
+              : [ItemType.anime, ItemType.manga, ItemType.novel];
+
+      final items = availableTypes.map((itemType) {
+        return PillItem(
+          icon: _getTypeIcon(itemType),
+          label: _getTypeLabel(itemType),
+          isSelected: controller.type.value == itemType,
+          onTap: () => controller.switchCategory(itemType),
+        );
+      }).toList();
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: AnymeXPills(
+          expandEqually: true,
+          scrollPadding: EdgeInsets.zero,
+          items: items,
+        ),
+      );
+    });
+  }
+
+  String _getTypeLabel(ItemType itemType) {
+    if (serviceHandler.serviceType.value == ServicesType.simkl) {
+      return 'Movies & Series';
+    } else {
+      switch (itemType) {
+        case ItemType.anime:
+          return 'Anime';
+        case ItemType.manga:
+          return 'Manga';
+        case ItemType.novel:
+          return 'Novel';
+      }
+    }
+  }
+
+  IconData _getTypeIcon(ItemType itemType) {
+    switch (itemType) {
+      case ItemType.anime:
+        return Icons.movie_filter_rounded;
+      case ItemType.manga:
+        return serviceHandler.serviceType.value == ServicesType.simkl
+            ? Iconsax.monitor
+            : Iconsax.book;
+      case ItemType.novel:
+        return Icons.auto_stories_rounded;
+    }
   }
 }

@@ -3,11 +3,12 @@
 import 'package:anymex/screens/anime/watch/controller/player_controller.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/player_control_themes/netflix_shared.dart';
 import 'package:anymex/screens/anime/watch/controls/themes/setup/player_control_theme.dart';
-import 'package:anymex/screens/anime/watch/controls/widgets/bottom_sheet.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/decoder_quick_button.dart';
 import 'package:anymex/screens/anime/watch/controls/widgets/progress_slider.dart';
+import 'package:anymex/services/cast/widgets/cast_device_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:anymex/widgets/anymex_widgets/anymex_text.dart';
 
 
 class NetflixDesktopPlayerControlTheme extends PlayerControlTheme {
@@ -36,7 +37,7 @@ class NetflixDesktopPlayerControlTheme extends PlayerControlTheme {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     NFRawButton(
-                      onTap: () => controller.handleBack(),
+                      onTap: () => Get.back(),
                       child: const Icon(Icons.arrow_back_rounded,
                           color: NFColors.white, size: 28),
                     ),
@@ -44,7 +45,7 @@ class NetflixDesktopPlayerControlTheme extends PlayerControlTheme {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 10.0),
-                        child: Obx(() => Text(
+                        child: Obx(() => AnymeXText(
                               buildNFTitle(controller),
                               textAlign: TextAlign.center,
                               maxLines: 2,
@@ -143,7 +144,7 @@ class NetflixDesktopPlayerControlTheme extends PlayerControlTheme {
                           },
                         ),
                         const SizedBox(width: 24),
-                        Obx(() => Text(
+                        Obx(() => AnymeXText(
                               '${controller.formattedCurrentPosition} / ${controller.formattedEpisodeDuration}',
                               style: const TextStyle(
                                 color: NFColors.white,
@@ -171,6 +172,12 @@ class NetflixDesktopPlayerControlTheme extends PlayerControlTheme {
                           size: 34,
                           onTap: () => controller.isEpisodePaneOpened.value =
                               !controller.isEpisodePaneOpened.value,
+                        ),
+                        const SizedBox(width: 20),
+                        NFDesktopButton(
+                          icon: Icons.cast_rounded,
+                          size: 32,
+                          onTap: () => CastDeviceDialog.show(context, controller),
                         ),
                         const SizedBox(width: 20),
                         NFDesktopButton(

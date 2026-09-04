@@ -11,10 +11,9 @@ class PlayerCoreVisualSettings {
     'interpolation': false,
     'cacheMinutes': 5,
     'demuxerReadaheadSeconds': 30,
-    'demuxerMaxBytesMb': 64,
-    'vdLavcThreads': 0,
-    'audioPitchCorrection': false,
-    'networkTimeout': 30,
+    'demuxerMaxBytesMb': 128,
+    'vdLavcThreads': 4,
+    'audioPitchCorrection': true,
   };
 
   static const Map<String, dynamic> betterPlayerCoreDefaults = {
@@ -29,8 +28,8 @@ class PlayerCoreVisualSettings {
     'debandThreshold': 64,
     'correctDownscaling': true,
     'sigmoidUpscaling': true,
-    'scale': 'ewa_lanczossharp',
-    'cscale': 'ewa_lanczossharp',
+    'scale': 'spline36',
+    'cscale': 'spline36',
     'dscale': 'mitchell',
     'ditherDepth': 'auto',
     'temporalDither': true,
@@ -87,7 +86,7 @@ class PlayerCoreVisualSettings {
     await _safeSet(
         mpv, 'cache-secs', (settings['cacheSeconds'] as num?)?.toInt() ?? 30);
     await _safeSet(mpv, 'demuxer-readahead-secs',
-        (settings['demuxerReadaheadSeconds'] as num?)?.toInt() ?? 30);
+        (settings['demuxerReadaheadSeconds'] as num?)?.toInt() ?? 20);
     await _safeSet(
       mpv,
       'demuxer-max-bytes',
@@ -99,11 +98,6 @@ class PlayerCoreVisualSettings {
       mpv,
       'audio-pitch-correction',
       _boolToMpv(settings['audioPitchCorrection']),
-    );
-    await _safeSet(
-      mpv,
-      'network-timeout',
-      (settings['networkTimeout'] as num?)?.toInt() ?? 30,
     );
   }
 
