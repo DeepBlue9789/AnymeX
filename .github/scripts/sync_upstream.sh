@@ -42,7 +42,7 @@ if git merge --no-edit "$UPSTREAM_TAG" -m "chore: sync upstream release $UPSTREA
   git push origin "$UPSTREAM_TAG" || true
 
   echo "Triggering build and release workflow..."
-  gh workflow run "Build and Release AnymeX (Android)" --ref "$UPSTREAM_TAG" || true
+  gh workflow run build.yml --ref "$UPSTREAM_TAG" || true
 
   if [ -n "$GITHUB_STEP_SUMMARY" ]; then
     echo "### ✅ Successfully Synced Upstream Release \`$UPSTREAM_TAG\`" >> "$GITHUB_STEP_SUMMARY"
