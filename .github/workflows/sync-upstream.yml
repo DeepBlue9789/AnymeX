@@ -1,8 +1,8 @@
 name: Auto Sync Upstream and Trigger Release
 on:
   schedule:
-    - cron: "0 */6 * * *" # Runs every 6 hours
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -30,11 +30,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch latest release tag from upstream RyanYuuki/AnymeX
           UPSTREAM_TAG=$(gh api repos/RyanYuuki/AnymeX/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
           echo "Upstream latest tag: $UPSTREAM_TAG"
 
-          # Fetch latest release tag from this fork
           FORK_TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
           echo "Fork latest tag: $FORK_TAG"
 
@@ -69,30 +67,32 @@ jobs:
           echo "Attempting to merge upstream tag $TAG into custom main..."
           if git merge --no-edit "$TAG" -m "chore: sync upstream release $TAG"; then
             echo "Merge successful!"
-            # Push updated main branch
             git push origin main
-            # Push the tag to trigger release
             git push origin "$TAG" || true
 
-            # Trigger build workflow explicitly for the new tag
             echo "Triggering build and release workflow for $TAG..."
             gh workflow run "Build and Release AnymeX (Android)" --ref "$TAG" || true
           else
             echo "Merge conflict encountered!"
             git merge --abort || true
-            gh issue create \
-              --title "⚠️ Sync conflict with upstream release $TAG" \
-              --body "Automated sync encountered a conflict while merging upstream release **$TAG** into your custom changes.
+            ISSUE_BODY=$(cat << 'EOF'
+Automated sync encountered a conflict while merging upstream release into your custom changes.
 
 ### Manual Resolution Steps:
-\`\`\`bash
+```bash
 git fetch upstream --tags
 git checkout main
-git merge $TAG
+git merge TAG_PLACEHOLDER
 # Resolve conflicts in your editor
-git commit -m \"chore: resolve merge conflicts with upstream $TAG\"
+git commit -m "chore: resolve merge conflicts with upstream TAG_PLACEHOLDER"
 git push origin main
-git push origin $TAG
-\`\`\`"
+git push origin TAG_PLACEHOLDER
+```
+EOF
+            )
+            ISSUE_BODY="${ISSUE_BODY//TAG_PLACEHOLDER/$TAG}"
+            gh issue create \
+              --title "Sync conflict with upstream release $TAG" \
+              --body "$ISSUE_BODY"
             exit 1
           fi
