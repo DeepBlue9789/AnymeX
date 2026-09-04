@@ -41,9 +41,11 @@ class UpdateManager {
     RxBool canShowUpdate, {
     bool isBeta = false,
     bool isManual = false,
+    bool manualCheck = false,
   }) async {
+    final effectiveIsManual = isManual || manualCheck;
     if (disableOfficialUpdates) {
-      if (isManual) {
+      if (effectiveIsManual) {
         snackBar("Official update checking is disabled on this custom fork.");
       } else {
         debugPrint("Skipping official update check on custom fork.");

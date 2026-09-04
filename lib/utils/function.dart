@@ -686,9 +686,6 @@ Future<void> navigateWithAnimation(dynamic page) async {
   );
 }
 
-Future<void> navigateWithAnimation(dynamic page) async {
-  navigate(page);
-}
 
 Future<void> navigateWithSlide(dynamic page) async {
   await Navigator.push(
