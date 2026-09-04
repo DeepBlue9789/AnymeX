@@ -25,7 +25,7 @@ git config user.email "github-actions[bot]@users.noreply.github.com"
 
 echo "Adding upstream remote..."
 git remote add upstream https://github.com/RyanYuuki/AnymeX.git || true
-git fetch upstream --tags
+git fetch upstream --tags --force
 
 echo "Checking out main branch..."
 git checkout main
