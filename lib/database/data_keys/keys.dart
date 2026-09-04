@@ -46,7 +46,7 @@ enum ThemeKeys {
   customHexColor,
 }
 
-enum PlayerKeys { useLibass, useMediaKit, useExternalPlayer, audioChannelLayout }
+enum PlayerKeys { useLibass, useMediaKit, useExternalPlayer, audioChannelLayout, autoRotateEnabled }
 
 enum PlayerUiKeys {
   playerExperimentalEnabled,
@@ -148,6 +148,13 @@ enum SyncKeys {
   gistGithubUsername,
   gistAutoDeleteCompleted,
   gistExitSyncNotifications,
+  syncProvider,
+  pocketbaseUrl,
+  pocketbaseEmail,
+  pocketbasePassword,
+  pocketbaseToken,
+  pocketbaseUserId,
+  pocketbaseAutoSyncHistory,
 }
 
 enum SourceKeys {
@@ -180,6 +187,9 @@ enum AuthKeys {
   simklAuthToken,
   malSessionId,
   mangaBakaAuthToken,
+  anilistCachedProfileJson,
+  anilistCachedUsername,
+  anilistCachedAvatar,
 }
 
 enum SearchKeys { novelSearchedQueries }
@@ -209,7 +219,9 @@ enum DynamicKeys {
   offlineVideoProgress,
   stickySource,
   stickyServer,
-  trackBindings;
+  trackBindings,
+  preferredServer,
+  preferredSubtitle;
 
   T get<T>(dynamic id, [T? defaultValue]) {
     return KvHelper.get<T>('${name}_$id', defaultVal: defaultValue);
@@ -262,6 +274,8 @@ enum PlayerSettingsKeys {
   enableHoldToSeek,
   enableSlideToSeek,
   useMediaSession,
+  enableGestureSafeZones,
+  gestureSafeZoneMargin,
 }
 
 enum UISettingsKeys {

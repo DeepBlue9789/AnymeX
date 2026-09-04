@@ -11,6 +11,7 @@ import 'package:anymex/models/Media/media.dart';
 import 'package:anymex/utils/logger.dart';
 import 'package:anymex_extension_runtime_bridge/Models/Source.dart';
 import 'package:anymex/controllers/stats/stats_tracker.dart';
+import 'package:anymex/database/data_keys/keys.dart';
 import 'package:get/get.dart';
 import 'package:isar_community/isar.dart';
 
@@ -412,6 +413,183 @@ class OfflineStorageController extends GetxController {
       return await query.mediaTypeIndexEqualTo(mediaType.index).findFirst();
     }
     return await query.findFirst();
+  }
+
+  Future<void> syncHistoryFromRemote(
+      List<Map<String, dynamic>> remoteItems) async {
+    final remoteMediaIds = remoteItems
+        .map((e) => e['media_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    for (final item in remoteItems) {
+      await upsertSyncedHistory(item);
+    }
+
+    final localAnime = await getAnimeLibrary();
+    for (final anime in localAnime) {
+      if (anime.currentEpisode != null) {
+        final mId = anime.mediaId ?? anime.id.toString();
+        if (!remoteMediaIds.contains(mId)) {
+          await clearMediaHistory(mId, mediaType: ItemType.anime);
+        }
+      }
+    }
+  }
+
+  Future<void> upsertSyncedHistory(Map<String, dynamic> remoteHistory) async {
+    final mediaId = remoteHistory['media_id']?.toString() ?? '';
+    if (mediaId.isEmpty) return;
+
+    final epNum = remoteHistory['episode_number']?.toString() ?? '1';
+    final epTitle =
+        remoteHistory['episode_title']?.toString() ?? 'Episode $epNum';
+    final timestampMs = (remoteHistory['timestamp_ms'] as num?)?.toInt() ?? 0;
+    final durationMs = (remoteHistory['duration_ms'] as num?)?.toInt() ?? 0;
+    final lastWatched = (remoteHistory['last_watched_time'] as num?)?.toInt() ??
+        DateTime.now().millisecondsSinceEpoch;
+    final source = remoteHistory['source']?.toString() ?? '';
+    final server = remoteHistory['server']?.toString() ?? '';
+    final subLang = remoteHistory['sub_language']?.toString() ?? '';
+    final thumbnail = remoteHistory['thumbnail']?.toString() ?? '';
+    final title = remoteHistory['title']?.toString() ?? 'Synced Media';
+    final cover = remoteHistory['cover']?.toString() ?? '';
+    final poster = remoteHistory['poster']?.toString() ?? '';
+
+    if (source.isNotEmpty) {
+      DynamicKeys.stickySource.set(mediaId, source);
+    }
+    if (server.isNotEmpty) {
+      DynamicKeys.preferredServer.set(mediaId, server);
+    }
+    if (subLang.isNotEmpty) {
+      DynamicKeys.preferredSubtitle.set(mediaId, subLang);
+    }
+
+    await isar.writeTxn(() async {
+      var existingAnime = getAnimeById(mediaId);
+
+      if (existingAnime == null) {
+        final episode = Episode(
+          number: epNum,
+          title: epTitle,
+          timeStampInMilliseconds: timestampMs,
+          durationInMilliseconds: durationMs,
+          lastWatchedTime: lastWatched,
+          source: source,
+          thumbnail: thumbnail,
+          link: remoteHistory['episode_link']?.toString() ?? '',
+        );
+        final newAnime = OfflineMedia(
+          mediaId: mediaId,
+          name: title,
+          cover: cover.isNotEmpty ? cover : poster,
+          poster: poster.isNotEmpty ? poster : cover,
+          mediaTypeIndex: 1,
+          currentEpisode: episode,
+          watchedEpisodes: [episode],
+        );
+        await isar.offlineMedias.put(newAnime);
+      } else {
+        existingAnime.watchedEpisodes ??= [];
+        final index = existingAnime.watchedEpisodes!
+            .indexWhere((e) => e.number == epNum);
+        existingAnime.watchedEpisodes =
+            List<Episode>.from(existingAnime.watchedEpisodes!);
+
+        final localEp = index != -1
+            ? existingAnime.watchedEpisodes![index]
+            : (existingAnime.currentEpisode?.number == epNum
+                ? existingAnime.currentEpisode
+                : null);
+
+        final resolvedDuration = (durationMs > 0)
+            ? durationMs
+            : (localEp?.durationInMilliseconds ?? 0);
+
+        final resolvedTimestamp = (localEp != null &&
+                (localEp.lastWatchedTime ?? 0) > lastWatched &&
+                (localEp.timeStampInMilliseconds ?? 0) > 0)
+            ? localEp.timeStampInMilliseconds!
+            : ((timestampMs > 0)
+                ? timestampMs
+                : (localEp?.timeStampInMilliseconds ?? 0));
+
+        final resolvedLastWatched = (localEp != null &&
+                (localEp.lastWatchedTime ?? 0) > lastWatched)
+            ? localEp.lastWatchedTime!
+            : lastWatched;
+
+        var resolvedThumb = thumbnail;
+        final localThumb = localEp?.thumbnail;
+        bool isLocalFile(String value) {
+          if (value.isEmpty) return false;
+          if (value.startsWith('http://') ||
+              value.startsWith('https://') ||
+              value.startsWith('data:image')) {
+            return false;
+          }
+          return value.startsWith('/') ||
+              value.startsWith('file://') ||
+              RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(value);
+        }
+
+        if (resolvedThumb.isEmpty &&
+            localThumb != null &&
+            localThumb.isNotEmpty &&
+            !isLocalFile(localThumb)) {
+          resolvedThumb = localThumb;
+        } else if (isLocalFile(resolvedThumb)) {
+          resolvedThumb =
+              (localThumb != null && !isLocalFile(localThumb)) ? localThumb : '';
+        }
+
+        final mergedEpisode = Episode(
+          number: epNum,
+          title: (epTitle.isNotEmpty && epTitle != 'Episode $epNum')
+              ? epTitle
+              : (localEp?.title ?? epTitle),
+          timeStampInMilliseconds: resolvedTimestamp,
+          durationInMilliseconds: resolvedDuration,
+          lastWatchedTime: resolvedLastWatched,
+          source: source.isNotEmpty ? source : (localEp?.source ?? ''),
+          thumbnail: resolvedThumb,
+          link: remoteHistory['episode_link']?.toString().isNotEmpty == true
+              ? remoteHistory['episode_link'].toString()
+              : (localEp?.link ?? ''),
+        );
+
+        if (index != -1) {
+          existingAnime.watchedEpisodes![index] = mergedEpisode;
+        } else {
+          existingAnime.watchedEpisodes!.add(mergedEpisode);
+        }
+
+        final currentLastWatched =
+            existingAnime.currentEpisode?.lastWatchedTime ?? 0;
+        if (resolvedLastWatched >= currentLastWatched) {
+          existingAnime.currentEpisode = mergedEpisode;
+        }
+
+        if ((existingAnime.name == null || existingAnime.name!.isEmpty) &&
+            title.isNotEmpty) {
+          existingAnime.name = title;
+        }
+        if ((existingAnime.cover == null || existingAnime.cover!.isEmpty) &&
+            cover.isNotEmpty) {
+          existingAnime.cover = cover;
+        }
+        if ((existingAnime.poster == null || existingAnime.poster!.isEmpty) &&
+            poster.isNotEmpty) {
+          existingAnime.poster = poster;
+        }
+
+        await isar.offlineMedias.put(existingAnime);
+      }
+    });
+
+    update();
   }
 
   Future<void> addCustomList(String listName,

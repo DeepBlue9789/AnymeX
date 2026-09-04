@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:anymex/database/isar_models/custom_list.dart';
@@ -17,6 +18,44 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../widgets/non_widgets/snackbar.dart';
 import '../main.dart';
+
+class IsarWriteLock {
+  static Future<void> _lastTxn = Future.value();
+
+  static Future<T> synchronized<T>(Future<T> Function() callback) async {
+    final prev = _lastTxn;
+    final completer = Completer<void>();
+    _lastTxn = completer.future;
+
+    try {
+      await prev;
+    } catch (_) {}
+
+    try {
+      return await callback();
+    } finally {
+      completer.complete();
+    }
+  }
+}
+
+extension SafeIsarWrite on Isar {
+  Future<T> safeWriteTxn<T>(Future<T> Function() callback,
+      {bool silent = false}) {
+    if (Zone.current[#isar_in_write_txn] == true) {
+      return callback();
+    }
+    return IsarWriteLock.synchronized(() {
+      if (Zone.current[#isar_in_write_txn] == true) {
+        return callback();
+      }
+      return runZoned(
+        () => writeTxn(() => callback(), silent: silent),
+        zoneValues: {#isar_in_write_txn: true},
+      );
+    });
+  }
+}
 
 class Database {
   Isar _openIsar(Directory dir) {

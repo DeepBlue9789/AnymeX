@@ -84,7 +84,7 @@ class CyberNeonPlayerControlTheme extends PlayerControlTheme {
                     _CyberGlassButton(
                       icon: CupertinoIcons.back,
                       tooltip: 'Back',
-                      onPressed: () => controller.handleBack(),
+                      onPressed: () => Get.back(),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
